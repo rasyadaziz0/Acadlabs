@@ -7,6 +7,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { SupabaseProvider } from "@/components/supabase-provider";
 import AuthLinksClient from "@/components/auth-links-client";
 import SEOJsonLd from "@/components/seo-jsonld";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -109,6 +111,9 @@ export default function RootLayout({
             <AuthLinksClient />
             {children}
             <Toaster />
+            {/* Vercel Analytics and Speed Insights */}
+            <Analytics />
+            <SpeedInsights />
           </SupabaseProvider>
         </ThemeProvider>
       </body>
