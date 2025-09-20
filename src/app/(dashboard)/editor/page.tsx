@@ -16,7 +16,6 @@ const CodeEditor = dynamic(() => import("@/components/code-editor"), {
   ssr: false,
 });
 
-// Contoh kode default untuk beberapa bahasa
 const defaultCode = {
   javascript: `// JavaScript Example
 console.log("Hello, World!");
