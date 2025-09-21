@@ -1,0 +1,38 @@
+{
+  "name": "Acadlabs",
+  "short_name": "Acadlabs",
+  "description": "Acadlabs adalah AI chat assistant berbahasa Indonesia untuk merangkum teks, menyusun rencana, brainstorming, dan menganalisis data.",
+  "lang": "id-ID",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#ffffff",
+  "background_color": "#0B0F1A",
+  "icons": [
+    {
+      "src": "/icons/android-launchericon-192-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable_icon_x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/android-launchericon-512-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable_icon_x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

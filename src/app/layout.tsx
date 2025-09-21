@@ -9,6 +9,7 @@ import AuthLinksClient from "@/components/auth-links-client";
 import SEOJsonLd from "@/components/seo-jsonld";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import PWARegister from "@/components/pwa/PWARegister";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -85,6 +86,8 @@ export const metadata: Metadata = {
       (process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION as string | undefined) ||
       (process.env.GOOGLE_SITE_VERIFICATION as string | undefined),
   },
+  // PWA manifest
+  manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = {
@@ -114,6 +117,8 @@ export default function RootLayout({
             {/* Vercel Analytics and Speed Insights */}
             <Analytics />
             <SpeedInsights />
+            {/* Register Service Worker for PWA */}
+            <PWARegister />
           </SupabaseProvider>
         </ThemeProvider>
       </body>
