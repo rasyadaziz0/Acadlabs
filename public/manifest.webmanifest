@@ -37,15 +37,20 @@
   ],
   "screenshots": [
     {
-      "src": "/screenshots/Chat-desktop.png",
+      "src": "/screenshots/chat-desktop.png",
+      "sizes": "1919x1079",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Chat - Desktop"
     },
     {
-      "src": "/screenshots/homepage-phone.png",
+      "src": "/screenshots/homepage.png",
+      "sizes": "1919x1079",
       "type": "image/png",
+      "form_factor": "narrow",
       "label": "Beranda - Mobile"
     }
   ]
+
+
 }
