@@ -34,5 +34,18 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/Chat-desktop.png",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Chat - Desktop"
+    },
+    {
+      "src": "/screenshots/homepage-phone.png",
+      "type": "image/png",
+      "label": "Beranda - Mobile"
+    }
   ]
 }
