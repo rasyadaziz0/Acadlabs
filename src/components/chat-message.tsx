@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useDeferredValue, useMemo, useContext, useState } from "react";
+import React, { useDeferredValue, useMemo, useContext, useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -9,7 +9,7 @@ import rehypeKatex from "rehype-katex";
 import { BlockMath } from "react-katex";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { FileText } from "lucide-react";
+import { FileText, Share2, Copy, Twitter, Linkedin } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
@@ -137,12 +137,65 @@ const normalizeHeadingSpacing = (text: string) => {
   }
 };
 
-// Fix common double-escaped/broken HTML entities coming from legacy messages
-// Examples we see: "a&gt;0" and stray "amp; amp;" or "amp;gt;".
-// Strategy:
-// 1) Turn patterns like "amp;gt;" -> "&gt;"
-// 2) Decode a minimal safe whitelist: &amp; &gt; &lt; &quot; &#39;
-// 3) Replace stray standalone "amp;" with "&" when not part of a larger entity
+const collapseTinyFences = (input: string): string => {
+  if (!input) return input;
+  const fenceRe = /(\n|^)([ \t]{0,3})```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)\n\2```/g;
+  let out = "";
+  let last = 0;
+  let m: RegExpExecArray | null;
+  const textLang = new Set(["", "text", "plaintext", "md", "markdown", "http", "sh", "bash"]);
+  const codeyRe = /(\{|\}|;|=>|\b(class|function|import|export|const|let|var|return|if|else|for|while|switch|case|break)\b|\n)/;
+
+  while ((m = fenceRe.exec(input)) !== null) {
+    const segStart = m.index + (m[1] ? m[1].length : 0); // keep preceding newline if present
+    out += input.slice(last, segStart);
+    const lang = String(m[3] || "").toLowerCase();
+    const bodyRaw = String(m[4] || "");
+    const body = bodyRaw.trim();
+    const singleLine = !/\n/.test(body);
+    const isTexty = textLang.has(lang);
+    const isShort = body.length <= 80;
+    const looksCodey = codeyRe.test(body);
+
+    if (singleLine && isShort && isTexty && !looksCodey) {
+      out += "`" + body + "`";
+    } else {
+      out += m[0].slice(m[1] ? m[1].length : 0); // emit fence without duplicating kept newline
+    }
+    last = fenceRe.lastIndex;
+  }
+  out += input.slice(last);
+  return out;
+};
+
+
+const tightenBodySpacing = (input: string): string => {
+  if (!input) return input;
+  const codeBlockRegex = /```[\s\S]*?```/g;
+  let result = "";
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = codeBlockRegex.exec(input)) !== null) {
+    const before = input.slice(lastIndex, match.index);
+    result += apply(before);
+    result += match[0];
+    lastIndex = match.index + match[0].length;
+  }
+  result += apply(input.slice(lastIndex));
+  return result;
+
+  function apply(segment: string): string {
+    let s = segment.replace(/\n{3,}/g, "\n\n");
+    s = s.replace(/\n\s*\.(?=\s*(\n|$))/g, ".");
+    s = s.replace(/\n\s*\)(?=\s*(\n|$))/g, ")");
+    s = s.replace(/(?<=\S)\s*\n\s*\(/g, " (");
+    s = s.replace(/\(\s*\n\s*/g, "(");
+    s = s.replace(/\n\s*(`[^`\n]{1,80}`)\s*\n/g, " $1 ");
+    s = s.replace(/(^|\n)\s*(\d{1,3})[\.)]\s*\n+\s*(?=\S)/g, "$1$2. ");
+    return s;
+  }
+};
+
 function fixAndDecodeEntitiesMinimal(input: string): string {
   if (!input) return input;
   const codeBlockRegex = /```[\s\S]*?```/g;
@@ -237,12 +290,25 @@ export type Message = {
   created_at: string;
 };
 
-type ChatMessageProps = { message?: Message; showCaret?: boolean; isStreaming?: boolean };
+type ChatMessageProps = { message?: Message; showCaret?: boolean; isStreaming?: boolean; chatTitle?: string };
 
-function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMessageProps) {
+function ChatMessage({ message, showCaret = false, isStreaming = false, chatTitle }: ChatMessageProps) {
   if (!message) return null;
 
   const [linkToOpen, setLinkToOpen] = useState<string | null>(null);
+  const [justShared, setJustShared] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = typeof window !== 'undefined' ? window.matchMedia('(max-width: 640px)') : null;
+    const update = () => setIsMobile(!!mq?.matches);
+    update();
+    mq?.addEventListener ? mq.addEventListener('change', update) : mq?.addListener?.(update);
+    return () => {
+      mq?.removeEventListener ? mq.removeEventListener('change', update) : mq?.removeListener?.(update);
+    };
+  }, []);
 
   const { meta: attachment, body } = parseAttachmentMarker(message.content);
   const deferredBody = useDeferredValue(body);
@@ -251,9 +317,7 @@ function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMe
     () => ({
       inlineMath(props: any) {
         const v = (props as any).value ?? "";
-        // During streaming, we don't run rehype-katex, so render raw delimiters
         if (isStreaming) return <span>{`$${String(v)}$`}</span>;
-        // When not streaming, rehype-katex will handle math rendering; this is a fallback
         return <span>{`$${String(v)}$`}</span>;
       },
       math(props: any) {
@@ -283,9 +347,7 @@ function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMe
           );
         }
 
-        // Inside table cells, render simple pre/text instead of Monaco to avoid bulky blocks
         if (inTableCell && rawCode) {
-          // Allow math blocks to still render as KaTeX when not streaming
           if (isMathLang) {
             if (!rawCode) return null;
             if (isStreaming) {
@@ -301,7 +363,6 @@ function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMe
               </div>
             );
           }
-          // Non-math code blocks inside tables -> plain text, no Monaco
           return (
             <pre className="my-2 whitespace-pre-wrap break-words text-sm bg-transparent px-0 py-0">{rawCode}</pre>
           );
@@ -347,7 +408,6 @@ function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMe
           );
         }
         if (!inline && rawCode) {
-          // No language specified -> treat as plain preformatted text, not Monaco
           return (
             <pre className="my-3 whitespace-pre-wrap break-words text-sm bg-zinc-200/60 dark:bg-zinc-900/60 px-3 py-2 rounded overflow-x-auto">{rawCode}</pre>
           );
@@ -372,7 +432,6 @@ function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMe
       const isAssistant = message.role === "assistant";
       const onClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
         if (!isAssistant) return; // Only intercept assistant links
-        // Show safety dialog instead of navigating directly
         e.preventDefault();
         setLinkToOpen(url);
       };
@@ -427,7 +486,6 @@ function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMe
     },
     tr(props: any) {
       const { children } = props as any;
-      // Thin row separator via bottom border; column separators added on td
       return <tr className="bg-white dark:bg-zinc-900 border-b border-border last:border-b-0">{children}</tr>;
     },
     th(props: any) {
@@ -452,7 +510,6 @@ function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMe
     },
     img(props: any) {
       const { src, alt } = props as any;
-      // eslint-disable-next-line @next/next/no-img-element
       return <img src={String(src || "")} alt={String(alt || "")} className="rounded-2xl max-w-full h-auto" />;
     },
   }), [isStreaming, message.role]);
@@ -464,9 +521,93 @@ function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMe
   const rehypePluginsArr = useMemo(() => (isStreaming ? [] : [rehypeKatex]), [isStreaming]);
 
   const normalizedBody = useMemo(
-    () => normalizeHeadingSpacing(normalizeMathDelimiters(isStreaming ? deferredBody : body)),
+    () => tightenBodySpacing(collapseTinyFences(normalizeHeadingSpacing(normalizeMathDelimiters(isStreaming ? deferredBody : body)))),
     [isStreaming, deferredBody, body]
   );
+
+  const previewText = useMemo(() => {
+    const max = 900;
+    const t = normalizedBody || "";
+    return t.length > max ? t.slice(0, max).trimEnd() + "…" : t;
+  }, [normalizedBody]);
+
+  async function handleShareConfirm() {
+    try {
+      const text = normalizedBody || "";
+      const navAny = navigator as any;
+      if (navAny && typeof navAny.share === "function") {
+        await navAny.share({ title: "AI Answer", text });
+        setJustShared(true);
+        setTimeout(() => setJustShared(false), 1500);
+        return;
+      }
+      await navigator.clipboard?.writeText(text);
+      setJustShared(true);
+      setTimeout(() => setJustShared(false), 1500);
+    } catch {
+    }
+  }
+
+  const openWindow = (url: string) => {
+    try {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      window.location.href = url;
+    }
+  };
+
+  const shareToX = () => {
+    const text = `${chatTitle ? chatTitle + "\n\n" : ""}${previewText}`.slice(0, 240);
+    const url = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
+    openWindow(url);
+    setShareOpen(false);
+  };
+
+  const shareToReddit = () => {
+    const title = chatTitle || "AI Answer";
+    const text = previewText;
+    const url = `https://www.reddit.com/submit?title=${encodeURIComponent(title)}&text=${encodeURIComponent(text)}`;
+    openWindow(url);
+    setShareOpen(false);
+  };
+
+  const shareGeneric = async () => {
+    await handleShareConfirm();
+    setShareOpen(false);
+  };
+
+  const buildShareUrl = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const text = normalizedBody || '';
+    const title = chatTitle || '';
+    const b64 = (s: string) => {
+      try {
+        return typeof window !== 'undefined' && window.btoa
+          ? window.btoa(unescape(encodeURIComponent(s)))
+          : '';
+      } catch {
+        return '';
+      }
+    };
+    const m = encodeURIComponent(b64(text));
+    const t = title ? `&t=${encodeURIComponent(b64(title))}` : '';
+    return `${origin}/share?m=${m}${t}`;
+  };
+
+  async function handleMobileShare() {
+    try {
+      const url = buildShareUrl();
+      const navAny = navigator as any;
+      if (navAny && typeof navAny.share === 'function') {
+        await navAny.share({ title: chatTitle || 'AI Answer', url });
+        return;
+      }
+      await navigator.clipboard?.writeText(url);
+      setJustShared(true);
+      setTimeout(() => setJustShared(false), 1500);
+    } catch {
+    }
+  }
 
   return (
     <>
@@ -501,6 +642,30 @@ function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMe
                   className="ml-0.5 inline-block align-[-0.15em] w-[8px] h-[1em] bg-current/70 rounded-sm"
                 />
               )}
+
+              <div className="mt-2 flex items-center gap-1 text-zinc-500">
+                <Button
+                  variant="ghost"
+                  className="h-8 w-8 p-0 hover:bg-transparent"
+                  onClick={async () => { await navigator.clipboard?.writeText(normalizedBody || ""); setJustShared(true); setTimeout(() => setJustShared(false), 1500); }}
+                  aria-label="Copy this answer"
+                  title={justShared ? "Copied" : "Copy"}
+                >
+                  <Copy size={16} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="h-8 w-8 p-0 hover:bg-transparent"
+                  onClick={async () => { if (isMobile) { await handleMobileShare(); } else { setShareOpen(true); } }}
+                  aria-label="Share this answer"
+                  title={justShared ? "Copied to clipboard" : "Share"}
+                >
+                  <Share2 size={16} />
+                </Button>
+                {justShared ? (
+                  <span className="text-xs text-zinc-500">Copied</span>
+                ) : null}
+              </div>
             </div>
           ) : (
             <div className="ml-auto w-fit max-w-[85%] sm:max-w-[70%]">
@@ -541,7 +706,59 @@ function ChatMessage({ message, showCaret = false, isStreaming = false }: ChatMe
       </div>
     </motion.div>
 
-    {/* Link safety dialog */}
+    <Dialog open={shareOpen} onOpenChange={(open) => { if (!open) setShareOpen(false); }}>
+      <DialogContent className="sm:max-w-[760px]">
+        <DialogHeader>
+          <DialogTitle className="text-[28px] font-bold leading-tight">
+            {chatTitle || "Bagikan jawaban"}
+          </DialogTitle>
+          <DialogDescription className="sr-only">Pratinjau jawaban yang akan dibagikan</DialogDescription>
+        </DialogHeader>
+        <div className="rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/80 p-3 sm:p-4 shadow-inner relative">
+          <div className="max-h-[360px] md:max-h-[420px] overflow-hidden">
+            <div className="prose dark:prose-invert max-w-none text-[15px] leading-relaxed">
+              <ReactMarkdown
+                remarkPlugins={remarkPluginsArr as any}
+                rehypePlugins={rehypePluginsArr as any}
+                components={markdownComponents}
+              >
+                {previewText}
+              </ReactMarkdown>
+            </div>
+          </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-zinc-100 dark:from-zinc-900 to-transparent"></div>
+          <div className="absolute bottom-2 right-3 text-sm font-semibold text-zinc-400 select-none">Acadlabs</div>
+        </div>
+        <div className="mt-2 text-xs text-zinc-500">Hanya jawaban ini yang akan dibagikan</div>
+        <div className="mt-3 grid grid-cols-4 gap-4 justify-items-center">
+          <div className="flex flex-col items-center gap-2">
+            <Button variant="ghost" className="h-12 w-12 rounded-full" onClick={async () => { const url = buildShareUrl(); await navigator.clipboard?.writeText(url); setJustShared(true); setShareOpen(false); setTimeout(() => setJustShared(false), 1500); }} aria-label="Salin tautan jawaban">
+              <Copy size={18} />
+            </Button>
+            <div className="text-xs text-zinc-500">Salin tautan</div>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <Button variant="ghost" className="h-12 w-12 rounded-full" onClick={shareToX} aria-label="Bagikan ke X">
+              <Twitter size={18} />
+            </Button>
+            <div className="text-xs text-zinc-500">X</div>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <Button variant="ghost" className="h-12 w-12 rounded-full" onClick={shareGeneric} aria-label="Bagikan ke LinkedIn">
+              <Linkedin size={18} />
+            </Button>
+            <div className="text-xs text-zinc-500">LinkedIn</div>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <Button variant="ghost" className="h-12 w-12 rounded-full" onClick={shareToReddit} aria-label="Bagikan ke Reddit">
+              <Share2 size={18} />
+            </Button>
+            <div className="text-xs text-zinc-500">Reddit</div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
     <Dialog open={!!linkToOpen} onOpenChange={(open) => { if (!open) setLinkToOpen(null); }}>
       <DialogContent>
         <DialogHeader>

@@ -10,6 +10,7 @@ import SearchResults from "@/components/search-results";
 import AiInput from "@/components/ui/ai-input";
 import { handleFileUpload } from "@/lib/upload-client";
 import { sanitizeUserText, sanitizeAIText, sanitizeSearchQuery } from "@/lib/sanitize";
+import { generateChatTitleFromUserInput } from "@/lib/title";
 
 type Message = {
   id: string;
@@ -76,6 +77,17 @@ export default function ChatPage() {
     []
   );
   const router = useRouter();
+
+  const derivedChatTitle = useMemo(() => {
+    try {
+      const firstUser = [...messages].find((m) => m.role === "user")?.content || "";
+      if (!firstUser) return "";
+      const body = firstUser.replace(/^::attachment\[[^\]]+\]\s*\n?/, "");
+      return generateChatTitleFromUserInput(body);
+    } catch {
+      return "";
+    }
+  }, [messages]);
 
   useEffect(() => {
     // On the index route (/chat), there is no id. Skip fetching without logging an error.
@@ -244,8 +256,8 @@ export default function ChatPage() {
     }
   }, [isStreaming]);
 
-  const handleSearch = async () => {
-    if (!input.trim()) return;
+  const handleSearch = async (): Promise<any[]> => {
+    if (!input.trim()) return [];
 
     setIsSearching(true);
     try {
@@ -258,9 +270,12 @@ export default function ChatPage() {
       });
 
       const data = await response.json();
-      setSearchResults(data.results || []);
+      const results = Array.isArray(data?.results) ? data.results : [];
+      setSearchResults(results);
+      return results;
     } catch (error) {
       console.error("Search error:", error);
+      return [];
     } finally {
       setIsSearching(false);
     }
@@ -340,9 +355,10 @@ export default function ChatPage() {
     setMessages((prev) => clampLastNMessages([...prev, userMessage], HISTORY_LIMIT));
     setInput("");
 
-    // If search is enabled and no file, perform search
+    // If search is enabled and no file, perform search and capture results locally
+    let effectiveSearchResults: any[] = [];
     if (useSearch && !hasFile) {
-      await handleSearch();
+      effectiveSearchResults = await handleSearch();
     }
 
     setIsLoading(true);
@@ -413,7 +429,8 @@ export default function ChatPage() {
           },
           body: JSON.stringify({
             messages: [...messages, userMessage],
-            searchResults: useSearch ? searchResults : [],
+            // Use the fresh results captured above to avoid stale state
+            searchResults: useSearch ? effectiveSearchResults : [],
           }),
         });
 
@@ -557,11 +574,12 @@ export default function ChatPage() {
         }
       }
 
-      // Update chat title if it's the first message
+      // Update chat title if it's the first message (ChatGPT-like concise title)
       if (messages.length === 0) {
+        const newTitle = generateChatTitleFromUserInput(query);
         await supabase
           .from("chats")
-          .update({ title: cleanQuery.substring(0, 30) })
+          .update({ title: newTitle })
           .eq("id", chatId as string)
           .eq("user_id", userData.user.id);
       }
@@ -642,7 +660,7 @@ export default function ChatPage() {
                 {messages
                   .filter(Boolean)
                   .map((message) => (
-                    <ChatMessage key={message.id} message={message} />
+                    <ChatMessage key={message.id} message={message} chatTitle={derivedChatTitle} />
                   ))}
                 {isStreaming && (
                   <div className="w-full">

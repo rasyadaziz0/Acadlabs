@@ -170,7 +170,7 @@ export default function AppSidebarContent() {
           >
             <Button
               variant={pathname === `/chat/${chat.id}` ? "secondary" : "ghost"}
-              className="w-full justify-start truncate text-left rounded-lg py-2 pr-8 text-sm"
+              className="w-full justify-start truncate text-left rounded-lg py-2 pr-12 text-sm"
               onClick={() => router.push(`/chat/${chat.id}`)}
             >
               {chat.title && chat.title.trim().length > 0 ? chat.title : "Untitled Chat"}
@@ -180,7 +180,7 @@ export default function AppSidebarContent() {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="absolute right-1 top-1.5 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                 >
                   <MoreVertical className="h-4 w-4" />
                 </Button>

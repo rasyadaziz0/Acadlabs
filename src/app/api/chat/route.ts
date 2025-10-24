@@ -184,16 +184,32 @@ export async function POST(request: NextRequest) {
     const systemFormattingInstruction: ChatMessage = {
       role: "system",
       content: [
-        "Use Markdown.",
-        "For mathematics, ALWAYS use LaTeX delimiters:",
+        "Gunakan Markdown untuk semua output.",
+        "",
+        "**Aturan matematika:**",
         "- Inline math: $...$",
-        "- Display/block math: $$...$$ (place $$ on its own lines).",
-        "Do NOT wrap equations in square brackets [] or code fences.",
-        "Do NOT escape the dollar signs unnecessarily.",
-        "If you include code, use code fences only for programming code, not math.",
-      ].join("\n"),
+        "- Block math: $$...$$ (dengan $$ di baris sendiri)",
+        "- Jangan pakai [ ] atau code fences untuk rumus.",
+        "- Jangan escape $.",
+        "",
+        "**Aturan kode:**",
+        "- Gunakan code fence hanya untuk potongan kode lengkap.",
+        "- Jangan bikin banyak code fence kecil hanya untuk token pendek seperti true/false.",
+        "- Gunakan inline code `likeThis` kalau cuma sebut nama method/variabel di kalimat.",
+        "- Satu response = maksimal satu code block untuk kode.",
+        "",
+        "**Aturan teks:**",
+        "- Gunakan paragraf ringkas, jangan kasih banyak spasi kosong.",
+        "- Pakai bullet list kalau cocok.",
+        "- Jangan taruh inline code sendirian di baris terpisah.",
+        "- Hindari pengulangan atau penjelasan bertele-tele.",
+        "- Jawab dengan gaya senior software engineer: jelas, padat, praktis.",
+        "",
+        "**Aturan konteks:**",
+        "- Kalau user minta sesuatu tanpa nyebut target (misalnya \\\"buat unit test\\\"), pilih function/class terdekat yang relevan.",
+        "- Jangan keluarin teks di luar aturan ini.",
+      ].join("\\n"),
     };
-
     // Prepend the system instruction
     const finalMessages = [systemFormattingInstruction, ...formattedMessages];
 

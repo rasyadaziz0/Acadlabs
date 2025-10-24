@@ -10,6 +10,7 @@ import SearchResults from "@/components/search-results";
 import AiInput from "@/components/ui/ai-input";
 import { handleFileUpload } from "@/lib/upload-client";
 import { sanitizeUserText, sanitizeAIText, sanitizeSearchQuery } from "@/lib/sanitize";
+import { generateChatTitleFromUserInput } from "@/lib/title";
 
 type Message = {
   id: string;
@@ -103,6 +104,17 @@ export default function ChatPage() {
     };
     fetchMessages();
   }, [id, supabase]);
+
+  const derivedChatTitle = useMemo(() => {
+    try {
+      const firstUser = [...messages].find((m) => m.role === "user")?.content || "";
+      if (!firstUser) return "";
+      const body = firstUser.replace(/^::attachment\[[^\]]+\]\s*\n?/, "");
+      return generateChatTitleFromUserInput(body);
+    } catch {
+      return "";
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (shouldAutoScroll) {
@@ -259,8 +271,8 @@ export default function ChatPage() {
     };
   }, [messages, id, supabase, isPolling]);
 
-  const handleSearch = async () => {
-    if (!input.trim()) return;
+  const handleSearch = async (): Promise<any[]> => {
+    if (!input.trim()) return [];
 
     try {
       const response = await fetch("/api/search", {
@@ -269,9 +281,12 @@ export default function ChatPage() {
         body: JSON.stringify({ query: sanitizeSearchQuery(input) }),
       });
       const data = await response.json();
-      setSearchResults(data.results || []);
+      const results = Array.isArray(data?.results) ? data.results : [];
+      setSearchResults(results);
+      return results;
     } catch (error) {
       console.error("Search error:", error);
+      return [];
     }
   };
 
@@ -356,8 +371,10 @@ export default function ChatPage() {
           });
         if (assistantError) throw assistantError;
       } else {
+        // Optionally perform DeepSearch and capture fresh results
+        let effectiveSearchResults: any[] = [];
         if (useSearch) {
-          await handleSearch();
+          effectiveSearchResults = await handleSearch();
         }
 
         // Text-only chat flow with streaming (DOM-based to reduce memory)
@@ -388,7 +405,8 @@ export default function ChatPage() {
           },
           body: JSON.stringify({
             messages: [...messages, userMessage],
-            searchResults: useSearch ? searchResults : [],
+            // Use the fresh results captured above to avoid stale state
+            searchResults: useSearch ? effectiveSearchResults : [],
           }),
         });
 
@@ -529,9 +547,10 @@ export default function ChatPage() {
       }
 
       if (messages.length === 0) {
+        const newTitle = generateChatTitleFromUserInput(query);
         await supabase
           .from("chats")
-          .update({ title: cleanQuery.substring(0, 30) })
+          .update({ title: newTitle })
           .eq("id", id)
           .eq("user_id", userData.user.id);
       }
@@ -542,8 +561,6 @@ export default function ChatPage() {
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
       }
       const errText = (error instanceof Error ? error.message : "Sorry, there was an error processing your request.");
-      // If we had an optimistic assistant message, convert it into an error message
-      // instead of appending a new one to avoid duplicates.
       setMessages((prev) => {
         const next = prev.slice();
         const idx = next.findIndex((m) => m.role === 'assistant' && m.chat_id === id && m.user_id === userData.user.id && m.content !== undefined);
@@ -607,7 +624,7 @@ export default function ChatPage() {
           ) : (
             <div className="space-y-3 sm:space-y-4">
               {messages.map((message) => (
-                <ChatMessage key={message.id} message={message} />
+                <ChatMessage key={message.id} message={message} chatTitle={derivedChatTitle} />
               ))}
               {isStreaming && (
                 <div className="w-full">
