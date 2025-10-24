@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
@@ -46,8 +46,6 @@ function decodeB64Utf8(input: string | null): string {
   try {
     const bin = atob(input);
     try {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
       return decodeURIComponent(escape(bin));
     } catch {
       return bin;
@@ -57,7 +55,7 @@ function decodeB64Utf8(input: string | null): string {
   }
 }
 
-export default function SharePage() {
+function ShareContent() {
   const params = useSearchParams();
   const m = params.get("m");
   const t = params.get("t");
@@ -81,7 +79,6 @@ export default function SharePage() {
       },
       img(props: any) {
         const { src, alt } = props as any;
-        // eslint-disable-next-line @next/next/no-img-element
         return <img src={String(src || "")} alt={String(alt || "")} className="rounded-2xl max-w-full h-auto" />;
       },
     }),
@@ -92,16 +89,26 @@ export default function SharePage() {
   const rehypePluginsArr = useMemo(() => [rehypeKatex], []);
 
   return (
+    <>
+      <h1 className="text-3xl font-bold tracking-tight mb-6">{title}</h1>
+      <div className="rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
+        <div className="prose dark:prose-invert w-full max-w-[72ch] text-[15px] leading-relaxed">
+          <ReactMarkdown remarkPlugins={remarkPluginsArr as any} rehypePlugins={rehypePluginsArr as any} components={components}>
+            {body}
+          </ReactMarkdown>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export default function SharePage() {
+  return (
     <main className="min-h-screen px-4 py-8 sm:py-12">
       <div className="mx-auto w-full sm:max-w-[720px] md:max-w-[820px]">
-        <h1 className="text-3xl font-bold tracking-tight mb-6">{title}</h1>
-        <div className="rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
-          <div className="prose dark:prose-invert w-full max-w-[72ch] text-[15px] leading-relaxed">
-            <ReactMarkdown remarkPlugins={remarkPluginsArr as any} rehypePlugins={rehypePluginsArr as any} components={components}>
-              {body}
-            </ReactMarkdown>
-          </div>
-        </div>
+        <Suspense fallback={<div className="h-40 w-full animate-pulse rounded-2xl bg-zinc-100/60 dark:bg-zinc-800/60" />}> 
+          <ShareContent />
+        </Suspense>
       </div>
     </main>
   );
