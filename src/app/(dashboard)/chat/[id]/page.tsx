@@ -74,7 +74,6 @@ export default function ChatPage() {
 
   useEffect(() => {
     const fetchMessages = async () => {
-      console.log('[FETCH] fetchMessages start', { chatId: id });
       setInitialLoading(true);
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
@@ -96,12 +95,10 @@ export default function ChatPage() {
           const merged = Array.from(map.values());
           const sorted = dedupeAndSort(merged);
           const clamped = clampLastNMessages(sorted, HISTORY_LIMIT);
-          console.log('[FETCH] fetchMessages merged', { prevLen: prev.length, fetched: (data as Message[]).length, out: clamped.length });
           return clamped;
         });
       }
       setInitialLoading(false);
-      console.log('[FETCH] fetchMessages finish');
     };
     fetchMessages();
   }, [id, supabase]);
@@ -202,14 +199,12 @@ export default function ChatPage() {
     const setup = async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!mounted || !userData.user) return;
-      console.log('[SUPABASE] subscribe messages INSERT', { chatId: id });
       channel = supabase
         .channel(`realtime:messages:${id}`)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${id}` },
           (payload) => {
-            console.log('[SUPABASE] subscription event', payload);
             const row = payload.new as Message;
             if (!row || row.user_id !== userData.user!.id) return;
             setMessages((prev) => {
@@ -222,7 +217,6 @@ export default function ChatPage() {
                 next = [...prev, row];
               }
               const out = clampLastNMessages(dedupeAndSort(next), HISTORY_LIMIT);
-              console.log('[MESSAGES] setMessages: prevLen->newLen', prev.length, out.length);
               return out;
             });
           }
@@ -233,7 +227,6 @@ export default function ChatPage() {
     return () => {
       mounted = false;
       if (channel) {
-        console.log('[SUPABASE] unsubscribe channel', { chatId: id });
         supabase.removeChannel(channel);
       }
     };
@@ -259,7 +252,6 @@ export default function ChatPage() {
             for (const m of data as Message[]) map.set(m.id, m as Message);
             const merged = Array.from(map.values());
             const out = clampLastNMessages(dedupeAndSort(merged), HISTORY_LIMIT);
-            console.log('[FETCH] polling merge', { prevLen: prev.length, fetched: (data as Message[]).length, out: out.length });
             return out;
           });
           const latest = data[data.length - 1];
@@ -410,7 +402,6 @@ export default function ChatPage() {
         };
         setMessages((prev) => {
           const next = clampLastNMessages([...prev, optimisticAssistant], HISTORY_LIMIT);
-          console.log('[MESSAGES] setMessages: prevLen->newLen', prev.length, next.length);
           return next;
         });
 
@@ -468,7 +459,6 @@ export default function ChatPage() {
               }
               // Incrementally update React state as well (optimistic assistant)
               if (streamMessageId) {
-                console.log('[STREAM] chunk:', apply.length, 'id:', streamMessageId);
                 setMessages((prev) => {
                   const idx = prev.findIndex((m) => m.id === streamMessageId);
                   if (idx === -1) return prev;
@@ -548,7 +538,6 @@ export default function ChatPage() {
             .insert(insertPayload)
             .select("*")
             .single();
-          console.log('[DB] insert message response', savedAssistant || assistantError);
           if (assistantError) throw assistantError;
           // Ensure local state reflects final content (in case Realtime lags)
           if (streamMessageId) {
