@@ -632,6 +632,149 @@ export default function ChatPage() {
       setStreamingAssistantId(null);
     }
   };
+
+  const handleMessageUpdated = (updated: Message) => {
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === updated.id);
+      if (idx === -1) return prev;
+      const next = prev.slice();
+      next[idx] = { ...prev[idx], ...updated } as Message;
+      return clampLastNMessages(dedupeAndSort(next), HISTORY_LIMIT);
+    });
+  };
+
+  const handleResendFromMessage = async (edited: Message) => {
+    try {
+      if (!edited || edited.role !== 'user') return;
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+      const chatId = edited.chat_id;
+      if (!chatId) return;
+
+      const idx = messages.findIndex((m) => m.id === edited.id);
+      if (idx === -1) return;
+      const history = dedupeAndSort(messages.slice(0, idx + 1).map((m) => (m.id === edited.id ? edited : m)));
+
+      setIsStreaming(true);
+
+      const streamMessageId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+        ? crypto.randomUUID()
+        : `assistant-${Date.now()}`;
+      const optimisticAssistant: Message = {
+        id: streamMessageId,
+        role: 'assistant',
+        content: '',
+        chat_id: chatId,
+        user_id: userData.user.id,
+        created_at: new Date().toISOString(),
+      };
+      setStreamingAssistantId(streamMessageId);
+      setMessages((prev) => {
+        const cut = prev.findIndex((m) => m.id === edited.id);
+        const base = cut !== -1 ? prev.slice(0, cut + 1) : prev;
+        return clampLastNMessages([...base, optimisticAssistant], HISTORY_LIMIT);
+      });
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify({ messages: history, searchResults: [] }),
+      });
+      if (!response.ok || !response.body) {
+        const msg = await response.text().catch(() => 'Failed to get AI response');
+        throw new Error(msg || 'Failed to get AI response');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let done = false;
+      let pendingChunk = '';
+      const finalChunks: string[] = [];
+      let rafPending = false;
+      let lastFlushTs = 0;
+      const FLUSH_MIN_INTERVAL_MS = 33;
+      const MIN_CHARS_BEFORE_FORCED_FLUSH = 64;
+      const scheduleFlush = () => {
+        if (rafPending) return;
+        rafPending = true;
+        const tick = () => {
+          const now = performance.now();
+          const shouldFlush = now - lastFlushTs >= FLUSH_MIN_INTERVAL_MS || pendingChunk.length >= MIN_CHARS_BEFORE_FORCED_FLUSH;
+          if (!shouldFlush) { requestAnimationFrame(tick); return; }
+          if (pendingChunk) {
+            if (streamingTextNodeRef.current) streamingTextNodeRef.current.appendData(pendingChunk);
+            const apply = pendingChunk;
+            finalChunks.push(apply);
+            pendingChunk = '';
+            lastFlushTs = now;
+            if (shouldAutoScrollRef.current) scrollToBottom('auto');
+            setMessages((prev) => {
+              const idx = prev.findIndex((m) => m.id === streamMessageId);
+              if (idx === -1) return prev;
+              const next = prev.slice();
+              next[idx] = { ...prev[idx], content: prev[idx].content + apply } as Message;
+              return next;
+            });
+          }
+          rafPending = false;
+        };
+        requestAnimationFrame(tick);
+      };
+
+      while (!done) {
+        const { value, done: d } = await reader.read();
+        done = d;
+        if (value) buffer += decoder.decode(value, { stream: true });
+        let i: number;
+        while ((i = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, i);
+          buffer = buffer.slice(i + 2);
+          const dataLines = rawEvent.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim());
+          for (const data of dataLines) {
+            if (!data) continue;
+            if (data === '[DONE]') { done = true; break; }
+            try {
+              const json = JSON.parse(data);
+              const delta = json?.choices?.[0]?.delta;
+              const token: string = typeof delta?.content === 'string' ? delta.content : (json?.choices?.[0]?.text as string) || '';
+              if (token) { pendingChunk += token; scheduleFlush(); }
+            } catch {}
+          }
+        }
+      }
+
+      if (pendingChunk) {
+        if (streamingTextNodeRef.current) streamingTextNodeRef.current.appendData(pendingChunk);
+        finalChunks.push(pendingChunk);
+        pendingChunk = '';
+        if (shouldAutoScrollRef.current) scrollToBottom('auto');
+      }
+
+      const finalText = sanitizeAIText(finalChunks.join('').trim());
+      if (finalText.length > 0) {
+        const { error: assistantError } = await supabase
+          .from('messages')
+          .insert({ id: streamMessageId, role: 'assistant', content: finalText, chat_id: chatId, user_id: userData.user.id });
+        if (assistantError) throw assistantError;
+        setMessages((prev) => {
+          const idx = prev.findIndex((m) => m.id === streamMessageId);
+          if (idx === -1) return prev;
+          const next = prev.slice();
+          next[idx] = { ...prev[idx], content: finalText } as Message;
+          return next;
+        });
+      }
+    } catch (e) {
+      console.error('Resend error:', e);
+      toast.error('Gagal mengirim ulang balasan');
+    } finally {
+      setIsStreaming(false);
+      const container = streamingContainerRef.current; if (container) container.textContent = '';
+      streamingTextNodeRef.current = null;
+      setStreamingAssistantId(null);
+    }
+  };
   return (
     <div className="flex min-h-full flex-col">
       {/* Scrollable content within main */}
@@ -660,7 +803,7 @@ export default function ChatPage() {
                 {messages
                   .filter(Boolean)
                   .map((message) => (
-                    <ChatMessage key={message.id} message={message} chatTitle={derivedChatTitle} />
+                    <ChatMessage key={message.id} message={message} chatTitle={derivedChatTitle} onMessageUpdated={handleMessageUpdated} onResend={handleResendFromMessage} />
                   ))}
                 {isStreaming && (
                   <div className="w-full">
