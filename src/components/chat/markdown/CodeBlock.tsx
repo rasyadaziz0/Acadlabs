@@ -14,6 +14,15 @@ const extractRawCode = (node: any, children: any) => {
   return typeof children === "string" ? children : "";
 };
 
+function decodeEntitiesMinimal(s: string) {
+  if (!s) return s;
+  let st = s.replace(/amp;([a-zA-Z#0-9]+;)/g, "&$1");
+  st = st.replace(/&amp;/g, "&").replace(/&gt;/g, ">");
+  st = st.replace(/&lt;/g, "<").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  st = st.replace(/&nbsp;/g, " ");
+  return st;
+}
+
 export function CodeBlock(props: any & { isStreaming?: boolean }) {
   const { node, inline, className, children, isStreaming } = props as any;
   const inTableCell = useContext(InTableCellContext);
@@ -28,7 +37,7 @@ export function CodeBlock(props: any & { isStreaming?: boolean }) {
   if (inline) {
     return (
       <code className="rounded-md border border-zinc-300/60 dark:border-zinc-700 bg-zinc-100 text-zinc-900 dark:bg-zinc-800/70 dark:text-zinc-100 px-1.5 py-0.5 text-[0.95em]">
-        {rawCode}
+        {decodeEntitiesMinimal(rawCode)}
       </code>
     );
   }
@@ -60,10 +69,10 @@ export function CodeBlock(props: any & { isStreaming?: boolean }) {
     }
     if (shouldInlineTiny) {
       return (
-        <code className="rounded-md border border-zinc-300/60 dark:border-zinc-700 bg-zinc-100 text-zinc-900 dark:bg-zinc-800/70 dark:text-zinc-100 px-1.5 py-0.5 text-[0.95em]">{rawCode}</code>
+        <code className="rounded-md border border-zinc-300/60 dark:border-zinc-700 bg-zinc-100 text-zinc-900 dark:bg-zinc-800/70 dark:text-zinc-100 px-1.5 py-0.5 text-[0.95em]">{decodeEntitiesMinimal(rawCode)}</code>
       );
     }
-    return <pre className="my-2 whitespace-pre-wrap break-words text-sm bg-transparent px-0 py-0">{rawCode}</pre>;
+    return <pre className="my-2 whitespace-pre-wrap break-words text-sm bg-transparent px-0 py-0">{decodeEntitiesMinimal(rawCode)}</pre>;
   }
 
   if (isMathLang) {
@@ -88,26 +97,26 @@ export function CodeBlock(props: any & { isStreaming?: boolean }) {
     if (isPlainLike) {
       return (
         <pre className="my-3 whitespace-pre-wrap break-words text-sm bg-zinc-100 dark:bg-zinc-900/70 px-3 py-2 rounded-xl overflow-x-auto">
-          {rawCode}
+          {decodeEntitiesMinimal(rawCode)}
         </pre>
       );
     }
     if (isStreaming) {
       return (
         <pre className="my-3 whitespace-pre-wrap break-words text-sm bg-zinc-100 dark:bg-zinc-900/70 px-3 py-2 rounded-xl overflow-x-auto">
-          {rawCode}
+          {decodeEntitiesMinimal(rawCode)}
         </pre>
       );
     }
     return (
       <div className="my-3 w-full overflow-x-auto">
-        <MonacoEditor code={rawCode} language={lang} readOnly />
+        <MonacoEditor code={decodeEntitiesMinimal(rawCode)} language={lang} readOnly />
       </div>
     );
   }
   if (!inline && rawCode) {
     return (
-      <pre className="my-3 whitespace-pre-wrap break-words text-sm bg-zinc-100 dark:bg-zinc-900/70 px-3 py-2 rounded-xl overflow-x-auto">{rawCode}</pre>
+      <pre className="my-3 whitespace-pre-wrap break-words text-sm bg-zinc-100 dark:bg-zinc-900/70 px-3 py-2 rounded-xl overflow-x-auto">{decodeEntitiesMinimal(rawCode)}</pre>
     );
   }
   return null;

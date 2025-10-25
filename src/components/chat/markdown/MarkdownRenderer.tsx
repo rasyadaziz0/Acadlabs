@@ -9,7 +9,7 @@ import rehypeKatex from "rehype-katex";
 import LinkDialog from "../LinkDialog";
 import { CodeBlock } from "./CodeBlock";
 import { Table, Thead, Tbody, Tr, Th, Td } from "./TableElements";
-import { remarkBrToBreak, normalizeMathDelimiters, normalizeHeadingSpacing, collapseTinyFences, tightenBodySpacing, mergeInlineTokenLines } from "./plugins";
+import { remarkBrToBreak, normalizeMathDelimiters, normalizeHeadingSpacing, collapseTinyFences, tightenBodySpacing, mergeInlineTokenLines, fixAndDecodeEntitiesMinimal } from "./plugins";
 
 export interface MarkdownRendererProps {
   content: string;
@@ -46,7 +46,11 @@ export default function MarkdownRenderer({ content, role, isStreaming = false, o
       tightenBodySpacing(
         mergeInlineTokenLines(
           collapseTinyFences(
-            normalizeHeadingSpacing(normalizeMathDelimiters(isStreaming ? deferred : content))
+            normalizeHeadingSpacing(
+              normalizeMathDelimiters(
+                fixAndDecodeEntitiesMinimal(isStreaming ? deferred : content)
+              )
+            )
           )
         )
       ),
