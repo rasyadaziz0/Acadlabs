@@ -1,12 +1,13 @@
 "use client";
 
-import React, { Suspense, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import { createBrowserClient } from "@supabase/ssr";
 
 function remarkBrToBreak() {
   return (tree: any) => {
@@ -59,6 +60,12 @@ function ShareContent() {
   const params = useSearchParams();
   const m = params.get("m");
   const t = params.get("t");
+  const router = useRouter();
+  const [attemptedRedirect, setAttemptedRedirect] = useState(false);
+  const supabase = useMemo(
+    () => createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!),
+    []
+  );
 
   const title = useMemo(() => decodeB64Utf8(t), [t]) || "Shared Answer";
   const body = useMemo(() => decodeB64Utf8(m), [m]);
@@ -88,6 +95,70 @@ function ShareContent() {
   const remarkPluginsArr = useMemo(() => [remarkMath, remarkGfm, remarkBrToBreak], []);
   const rehypePluginsArr = useMemo(() => [rehypeKatex], []);
 
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      if (!m || !body) { setAttemptedRedirect(true); return; }
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData?.user) { setAttemptedRedirect(true); return; }
+        // Cari pesan assistant milik user yang sama persis dengan body (legacy share menyalin 1 jawaban)
+        const { data: msg, error: msgErr } = await supabase
+          .from("messages")
+          .select("chat_id, created_at")
+          .eq("user_id", userData.user.id)
+          .eq("role", "assistant")
+          .eq("content", body)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (msgErr || !msg) { setAttemptedRedirect(true); return; }
+
+        const chatId = (msg as any).chat_id as string;
+        // Ambil/generate share_slug pada chats
+        let slug: string | undefined;
+        const { data: chatRow } = await supabase
+          .from("chats")
+          .select("share_slug")
+          .eq("id", chatId)
+          .maybeSingle();
+        if (chatRow?.share_slug) {
+          slug = chatRow.share_slug as string;
+        } else {
+          const gen = () => crypto.randomUUID().split('-')[0];
+          let tries = 0;
+          while (tries < 6 && !slug) {
+            const candidate = gen();
+            const { data: exists } = await supabase
+              .from("chats")
+              .select("id")
+              .eq("share_slug", candidate)
+              .maybeSingle();
+            if (!exists) {
+              const { data: updated, error: updErr } = await supabase
+                .from("chats")
+                .update({ share_slug: candidate })
+                .eq("id", chatId)
+                .select("share_slug")
+                .single();
+              if (!updErr && updated?.share_slug) slug = updated.share_slug as string;
+            }
+            tries++;
+          }
+        }
+
+        if (slug && mounted) {
+          router.replace(`/s/${encodeURIComponent(slug)}`);
+          return;
+        }
+      } finally {
+        if (mounted) setAttemptedRedirect(true);
+      }
+    };
+    run();
+    return () => { mounted = false; };
+  }, [m, body, router, supabase]);
+
   return (
     <>
       <h1 className="text-3xl font-bold tracking-tight mb-6">{title}</h1>
@@ -98,6 +169,11 @@ function ShareContent() {
           </ReactMarkdown>
         </div>
       </div>
+      {!attemptedRedirect ? (
+        <div className="mt-4 text-sm text-zinc-500">Mengarahkan ke tautan pendek…</div>
+      ) : (
+        <div className="mt-4 text-sm text-zinc-500">Ini adalah format link lama. Bagikan ulang untuk mendapatkan tautan pendek.</div>
+      )}
     </>
   );
 }

@@ -63,6 +63,7 @@ export default function ChatPage() {
   const streamingContainerRef = useRef<HTMLDivElement>(null);
   const streamingTextNodeRef = useRef<Text | null>(null);
   const shouldAutoScrollRef = useRef<boolean>(true);
+  const [shareSlug, setShareSlug] = useState<string | undefined>(undefined);
 
   const supabase = useMemo(() =>
     createBrowserClient(
@@ -103,6 +104,22 @@ export default function ChatPage() {
       console.log('[FETCH] fetchMessages finish');
     };
     fetchMessages();
+  }, [id, supabase]);
+
+  useEffect(() => {
+    const fetchShareSlug = async () => {
+      if (!id) return;
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
+      const { data, error } = await supabase
+        .from("chats")
+        .select("share_slug")
+        .eq("id", id)
+        .eq("user_id", userData.user.id)
+        .single();
+      if (!error && data) setShareSlug((data as any).share_slug || undefined);
+    };
+    fetchShareSlug();
   }, [id, supabase]);
 
   const derivedChatTitle = useMemo(() => {
@@ -765,7 +782,7 @@ export default function ChatPage() {
           ) : (
             <div className="space-y-3 sm:space-y-4">
               {messages.map((message) => (
-                <ChatMessage key={message.id} message={message} chatTitle={derivedChatTitle} onMessageUpdated={handleMessageUpdated} onResend={handleResendFromMessage} />
+                <ChatMessage key={message.id} message={message} chatTitle={derivedChatTitle} shareSlug={shareSlug} onMessageUpdated={handleMessageUpdated} onResend={handleResendFromMessage} />
               ))}
               {isStreaming && (
                 <div className="w-full">

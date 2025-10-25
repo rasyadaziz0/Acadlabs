@@ -19,7 +19,7 @@ export type Message = {
   created_at: string;
 };
 
-export type ChatMessageProps = { message?: Message; showCaret?: boolean; isStreaming?: boolean; chatTitle?: string; onMessageUpdated?: (m: Message) => void; onResend?: (m: Message) => void };
+export type ChatMessageProps = { message?: Message; showCaret?: boolean; isStreaming?: boolean; chatTitle?: string; shareSlug?: string; onMessageUpdated?: (m: Message) => void; onResend?: (m: Message) => void };
 
 const parseAttachmentMarker = (text: string): { meta?: AttachmentMeta; body: string } => {
   if (!text) return { body: "" };
@@ -42,7 +42,7 @@ const parseAttachmentMarker = (text: string): { meta?: AttachmentMeta; body: str
   return { meta, body };
 };
 
-function ChatMessage({ message, showCaret = false, isStreaming = false, chatTitle, onMessageUpdated, onResend }: ChatMessageProps) {
+function ChatMessage({ message, showCaret = false, isStreaming = false, chatTitle, shareSlug, onMessageUpdated, onResend }: ChatMessageProps) {
   if (!message) return null;
 
   const { meta: attachment, body } = useMemo(() => parseAttachmentMarker(message.content), [message.content]);
@@ -140,7 +140,7 @@ function ChatMessage({ message, showCaret = false, isStreaming = false, chatTitl
                   />
                 )}
 
-                <ShareButtons content={normalizedForShare} chatTitle={chatTitle} />
+                <ShareButtons content={normalizedForShare} chatTitle={chatTitle} shareSlug={shareSlug} chatId={message.chat_id} messageId={message.id} />
               </div>
             ) : (
               <div className="ml-auto w-fit max-w-[85%] sm:max-w-[70%] group">

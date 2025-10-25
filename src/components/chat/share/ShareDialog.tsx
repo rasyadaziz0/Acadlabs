@@ -11,10 +11,11 @@ export interface ShareDialogProps {
   onOpenChange: (open: boolean) => void;
   content: string;
   chatTitle?: string;
+  shareSlug?: string;
   onCopied?: () => void;
 }
 
-export default function ShareDialog({ open, onOpenChange, content, chatTitle, onCopied }: ShareDialogProps) {
+export default function ShareDialog({ open, onOpenChange, content, chatTitle, shareSlug, onCopied }: ShareDialogProps) {
   const previewText = useMemo(() => {
     const max = 900;
     const t = content || "";
@@ -31,18 +32,8 @@ export default function ShareDialog({ open, onOpenChange, content, chatTitle, on
 
   const buildShareUrl = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const text = content || '';
-    const title = chatTitle || '';
-    const b64 = (s: string) => {
-      try {
-        return typeof window !== 'undefined' && window.btoa ? window.btoa(unescape(encodeURIComponent(s))) : '';
-      } catch {
-        return '';
-      }
-    };
-    const m = encodeURIComponent(b64(text));
-    const t = title ? `&t=${encodeURIComponent(b64(title))}` : '';
-    return `${origin}/share?m=${m}${t}`;
+    if (shareSlug) return `${origin}/s/${encodeURIComponent(shareSlug)}`;
+    return '';
   };
 
   const shareToX = () => {

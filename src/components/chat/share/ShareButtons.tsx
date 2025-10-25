@@ -1,50 +1,36 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Copy, Share2 } from "lucide-react";
+import { toast } from "sonner";
+import { createBrowserClient } from "@supabase/ssr";
 import ShareDialog from "./ShareDialog";
 
 export interface ShareButtonsProps {
   content: string;
   chatTitle?: string;
+  shareSlug?: string;
+  chatId?: string;
+  messageId?: string;
 }
 
-export default function ShareButtons({ content, chatTitle }: ShareButtonsProps) {
+export default function ShareButtons({ content, chatTitle, shareSlug, chatId, messageId }: ShareButtonsProps) {
   const [justShared, setJustShared] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [slugOverride, setSlugOverride] = useState<string | undefined>(undefined); // message-level slug when available
+  const [isSharing, setIsSharing] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    const mq = typeof window !== "undefined" ? window.matchMedia("(max-width: 640px)") : null;
-    const update = () => setIsMobile(!!mq?.matches);
-    update();
-    mq?.addEventListener ? mq.addEventListener("change", update) : mq?.addListener?.(update);
-    return () => {
-      mq?.removeEventListener ? mq.removeEventListener("change", update) : mq?.removeListener?.(update);
-    };
-  }, []);
+  const supabase = useMemo(
+    () => createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!),
+    []
+  );
 
-  const previewText = useMemo(() => {
-    const max = 900;
-    const t = content || "";
-    return t.length > max ? t.slice(0, max).trimEnd() + "…" : t;
-  }, [content]);
-
-  const buildShareUrl = () => {
+  const buildShortShareUrl = () => {
+    const effective = slugOverride || shareSlug;
+    if (!effective) return "";
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const text = content || "";
-    const title = chatTitle || "";
-    const b64 = (s: string) => {
-      try {
-        return typeof window !== "undefined" && window.btoa ? window.btoa(unescape(encodeURIComponent(s))) : "";
-      } catch {
-        return "";
-      }
-    };
-    const m = encodeURIComponent(b64(text));
-    const t = title ? `&t=${encodeURIComponent(b64(title))}` : "";
-    return `${origin}/share?m=${m}${t}`;
+    return `${origin}/s/${encodeURIComponent(effective)}`;
   };
 
   async function handleCopyAnswer() {
@@ -55,22 +41,151 @@ export default function ShareButtons({ content, chatTitle }: ShareButtonsProps) 
     } catch {}
   }
 
-  async function handleMobileShare() {
+  async function handleShareClick() {
     try {
-      const url = buildShareUrl();
-      const navAny = navigator as any;
-      if (navAny && typeof navAny.share === "function") {
-        await navAny.share({ title: chatTitle || "AI Answer", url });
+      setIsSharing(true);
+      let effectiveSlug = slugOverride || shareSlug;
+
+      // 1) Per-message share: gunakan messages.share_slug
+      if (!effectiveSlug && messageId) {
+        // Re-check row message
+        const { data: msgRow } = await supabase
+          .from("messages")
+          .select("share_slug")
+          .eq("id", messageId)
+          .maybeSingle();
+        if (msgRow?.share_slug) {
+          effectiveSlug = msgRow.share_slug as string;
+          setSlugOverride(effectiveSlug);
+        } else {
+          const gen = () => crypto.randomUUID().split('-')[0];
+          let attempts = 0;
+          while (attempts < 6 && !effectiveSlug) {
+            const candidate = gen();
+            // cek unik di messages
+            const { data: existsMsg } = await supabase
+              .from("messages")
+              .select("id")
+              .eq("share_slug", candidate)
+              .maybeSingle();
+            if (!existsMsg) {
+              const { data: updatedMsg, error: updErr } = await supabase
+                .from("messages")
+                .update({ share_slug: candidate })
+                .eq("id", messageId)
+                .select("share_slug")
+                .single();
+              if (!updErr && updatedMsg?.share_slug) {
+                effectiveSlug = updatedMsg.share_slug as string;
+                setSlugOverride(effectiveSlug);
+                break;
+              }
+            }
+            attempts++;
+          }
+        }
+      }
+
+      // 2) Fallback (optional): per-chat kalau messageId tidak diberikan
+      if (!effectiveSlug && !messageId && chatId) {
+        const { data: chatRow, error: chatErr } = await supabase
+          .from("chats")
+          .select("share_slug")
+          .eq("id", chatId)
+          .single();
+        if (!chatErr && chatRow?.share_slug) {
+          effectiveSlug = chatRow.share_slug as string;
+          setSlugOverride(effectiveSlug);
+        } else {
+          const gen = () => crypto.randomUUID().split('-')[0];
+          let attempts = 0;
+          while (attempts < 6 && !effectiveSlug) {
+            const candidate = gen();
+            const { data: existsChat } = await supabase
+              .from("chats")
+              .select("id")
+              .eq("share_slug", candidate)
+              .maybeSingle();
+            if (!existsChat) {
+              const { data: updated, error: updErr } = await supabase
+                .from("chats")
+                .update({ share_slug: candidate })
+                .eq("id", chatId)
+                .select("share_slug")
+                .single();
+              if (!updErr && updated?.share_slug) {
+                effectiveSlug = updated.share_slug as string;
+                setSlugOverride(effectiveSlug);
+                break;
+              }
+            }
+            attempts++;
+          }
+        }
+      }
+
+      if (!effectiveSlug) {
+        toast.error("Tidak bisa membuat tautan pendek. Coba lagi nanti.");
+        setIsSharing(false);
         return;
       }
-      await navigator.clipboard?.writeText(url);
-      setJustShared(true);
-      setTimeout(() => setJustShared(false), 1500);
-    } catch {}
+      const url = buildShortShareUrl();
+      if (!url) { setIsSharing(false); return; }
+
+      // Mobile: langsung Web Share jika tersedia; fallback copy
+      const navAny = navigator as any;
+      const isCoarse = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      if (navAny && typeof navAny.share === 'function' && isCoarse) {
+        try {
+          await navAny.share({ title: chatTitle || 'Shared Chat', url });
+          setIsSharing(false);
+          return;
+        } catch {
+          // fallback copy to clipboard
+          try {
+            if (navigator.clipboard?.writeText) {
+              await navigator.clipboard.writeText(url);
+            } else {
+              const ta = document.createElement('textarea');
+              ta.value = url;
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+            }
+            setJustShared(true);
+            toast.success('Tautan disalin');
+            setTimeout(() => setJustShared(false), 1500);
+          } catch {}
+          setIsSharing(false);
+          return;
+        }
+      }
+
+      // Desktop: buka preview modal ala ChatGPT
+      setIsSharing(false);
+      setOpen(true);
+    } catch {
+      setIsSharing(false);
+      toast.error("Terjadi kesalahan saat membagikan");
+    }
   }
 
   return (
     <div className="mt-2 flex items-center gap-1 text-zinc-500">
+      {/* Desktop preview modal */}
+      <ShareDialog
+        open={open}
+        onOpenChange={setOpen}
+        content={content}
+        chatTitle={chatTitle}
+        shareSlug={slugOverride || shareSlug}
+        onCopied={() => {
+          setJustShared(true);
+          toast.success('Tautan disalin');
+          setTimeout(() => setJustShared(false), 1500);
+        }}
+      />
       <Button
         variant="ghost"
         className="h-8 w-8 p-0 hover:bg-transparent"
@@ -83,30 +198,14 @@ export default function ShareButtons({ content, chatTitle }: ShareButtonsProps) 
       <Button
         variant="ghost"
         className="h-8 w-8 p-0 hover:bg-transparent"
-        onClick={async () => {
-          if (isMobile) {
-            await handleMobileShare();
-          } else {
-            setShareOpen(true);
-          }
-        }}
+        onClick={handleShareClick}
+        disabled={isSharing}
         aria-label="Share this answer"
-        title={justShared ? "Copied to clipboard" : "Share"}
+        title={isSharing ? "Generating link..." : justShared ? "Copied to clipboard" : "Share link"}
       >
         <Share2 size={16} />
       </Button>
       {justShared ? <span className="text-xs text-zinc-500">Copied</span> : null}
-
-      <ShareDialog
-        open={shareOpen}
-        onOpenChange={(open: boolean) => setShareOpen(open)}
-        content={content}
-        chatTitle={chatTitle}
-        onCopied={() => {
-          setJustShared(true);
-          setTimeout(() => setJustShared(false), 1500);
-        }}
-      />
     </div>
   );
 }
