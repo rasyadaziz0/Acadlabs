@@ -11,7 +11,7 @@ const suggestions = [
 
 export function EmptyState({ setInput }: { setInput: (val: string) => void }) {
     return (
-        <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto px-4 text-center mt-[-10vh]">
+        <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto px-4 text-center mt-0">
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}

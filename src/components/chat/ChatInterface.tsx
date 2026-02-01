@@ -60,7 +60,7 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
 
     return (
         <div className="flex flex-col h-full relative" id="app-scroll">
-            <div className="flex-1 overflow-y-auto w-full pb-[200px]" id="app-scroll">
+            <div className="flex-1 overflow-y-auto w-full pb-36" id="app-scroll">
                 <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
                     {messages.length === 0 && !isLoadingMessages ? (
                         <EmptyState setInput={setInput} />
@@ -88,7 +88,7 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
 
             <div
                 ref={inputContainerRef}
-                className="fixed bottom-0 md:left-64 left-0 right-0 z-20 bg-background/80 backdrop-blur-xl border-t border-zinc-200/50 dark:border-zinc-800/50 pt-3 pb-4 px-4"
+                className="fixed bottom-0 z-20 w-full bg-gradient-to-t from-background via-background/90 to-transparent pt-6 pb-2 px-4 md:left-64 md:w-[calc(100%-16rem)]"
             >
                 <div className="max-w-3xl mx-auto space-y-4">
                     {searchResults.length > 0 && <SearchResults results={searchResults} />}
@@ -103,8 +103,8 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
                         onSearchToggle={() => setUseSearch(!useSearch)}
                         placeholder="Ketik pesan..."
                     />
-                    <div className="mt-2 text-center">
-                        <p className="text-[10px] sm:text-xs text-muted-foreground/60">
+                    <div className="text-center mt-2 mb-1">
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
                             Acadlabs dapat membuat kesalahan. Periksa kembali informasi penting.
                         </p>
                     </div>

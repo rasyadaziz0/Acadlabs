@@ -56,7 +56,7 @@ function useAutoResizeTextarea({
   return { textareaRef, adjustHeight }
 }
 
-const MIN_HEIGHT = 48
+const MIN_HEIGHT = 44
 const MAX_HEIGHT = 164
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
 
@@ -68,11 +68,10 @@ const AnimatedPlaceholder = ({ showSearch }: { showSearch: boolean }) => (
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -5 }}
       transition={{ duration: 0.1 }}
-      className={`pointer-events-none w-[150px] text-sm absolute ${
-        showSearch 
-          ? "bg-gradient-to-r from-blue-600 via-purple-600 via-cyan-400 to-blue-600 bg-[length:200%_100%] bg-clip-text text-transparent animate-shimmer" 
-          : "text-black/70 dark:text-white/70"
-      }`}
+      className={`pointer-events-none w-[150px] text-sm absolute ${showSearch
+        ? "bg-gradient-to-r from-blue-600 via-purple-600 via-cyan-400 to-blue-600 bg-[length:200%_100%] bg-clip-text text-transparent animate-shimmer"
+        : "text-black/70 dark:text-white/70"
+        }`}
     >
       {showSearch ? "Search the web..." : "Ask Acadlabs AI..."}
     </motion.p>
@@ -198,7 +197,7 @@ export default function AiInput({
   }, [attachedFile])
 
   return (
-    <div className={cn("w-full max-w-full overflow-hidden py-4", className)}>
+    <div className={cn("w-full max-w-full overflow-hidden py-2", className)}>
       <div
         className={cn(
           "relative w-full max-w-full overflow-hidden mx-auto",
@@ -211,7 +210,7 @@ export default function AiInput({
             isBorderless
               ? "bg-black/5 dark:bg-white/5 ring-1 ring-black/10 dark:ring-white/10"
               : "bg-gray-100 dark:bg-[#1f1f1f]",
-            useSearch ? "rounded-[21px]" : "rounded-2xl"
+            useSearch ? "rounded-[25px]" : "rounded-3xl"
           )}
         >
           <div
@@ -223,7 +222,7 @@ export default function AiInput({
                 value={value}
                 placeholder=""
                 className={cn(
-                  "w-full min-w-0 px-4 py-3 text-black dark:text-white border-none resize-none focus-visible:ring-0 leading-[1.2]",
+                  "w-full min-w-0 px-4 py-2.5 text-black dark:text-white border-none resize-none focus-visible:ring-0 leading-[1.2]",
                   isBorderless ? "bg-transparent" : "bg-gray-100 dark:bg-[#1f1f1f]",
                   compactTextOnly && "pr-10"
                 )}
@@ -343,7 +342,7 @@ export default function AiInput({
                   "cursor-pointer rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/5",
                   !isBorderless && "ring-1 ring-black/10 dark:ring-white/10",
                   isLoading || !canSend
-                    ? "opacity-50 cursor-not-allowed" 
+                    ? "opacity-50 cursor-not-allowed"
                     : ""
                 )}
                 title="Send message"

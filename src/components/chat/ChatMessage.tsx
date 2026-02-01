@@ -73,27 +73,22 @@ function ChatMessage({ message, showCaret = false, isStreaming = false, chatTitl
         <div className={`w-full flex items-start gap-3 sm:gap-4 ${message.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
           <div className="flex-1 min-w-0">
             {message.role === "assistant" ? (
-              <div className="flex w-full">
-                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-600/10 flex items-center justify-center mt-1 mr-4">
-                  <span className="text-xs font-bold text-blue-600">AC</span>
+              <div className="w-full">
+                <div className="prose dark:prose-invert w-full max-w-[72ch] min-w-0 break-words text-[15px] leading-relaxed prose-headings:tracking-tight prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-2 prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-p:leading-7 prose-li:leading-7 prose-p:my-[6px] prose-strong:font-semibold prose-a:no-underline hover:prose-a:underline prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-ul:my-[6px] prose-ol:my-[6px] prose-li:my-1 prose-li:marker:text-zinc-500 dark:prose-li:marker:text-zinc-400 prose-pre:rounded-lg prose-pre:bg-zinc-100 dark:prose-pre:bg-zinc-900 prose-hr:border-zinc-200 dark:prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-zinc-300 dark:prose-blockquote:border-zinc-700 prose-blockquote:pl-4 prose-blockquote:italic">
+                  <MarkdownRenderer content={body} role={message.role} isStreaming={isStreaming} onNormalizedChange={setNormalizedForShare} />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="prose dark:prose-invert w-full max-w-[72ch] min-w-0 break-words text-[15px] leading-relaxed prose-headings:tracking-tight prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-2 prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-p:leading-7 prose-li:leading-7 prose-p:my-[6px] prose-strong:font-semibold prose-a:no-underline hover:prose-a:underline prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-ul:my-[6px] prose-ol:my-[6px] prose-li:my-1 prose-li:marker:text-zinc-500 dark:prose-li:marker:text-zinc-400 prose-pre:rounded-lg prose-pre:bg-zinc-100 dark:prose-pre:bg-zinc-900 prose-hr:border-zinc-200 dark:prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-zinc-300 dark:prose-blockquote:border-zinc-700 prose-blockquote:pl-4 prose-blockquote:italic">
-                    <MarkdownRenderer content={body} role={message.role} isStreaming={isStreaming} onNormalizedChange={setNormalizedForShare} />
-                  </div>
 
-                  {showCaret && (
-                    <motion.span
-                      aria-hidden
-                      initial={{ opacity: 0.25 }}
-                      animate={{ opacity: [0.25, 1, 0.25] }}
-                      transition={{ duration: 1, repeat: Infinity }}
-                      className="ml-0.5 inline-block align-[-0.15em] w-[8px] h-[1em] bg-current/70 rounded-sm"
-                    />
-                  )}
+                {showCaret && (
+                  <motion.span
+                    aria-hidden
+                    initial={{ opacity: 0.25 }}
+                    animate={{ opacity: [0.25, 1, 0.25] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                    className="ml-0.5 inline-block align-[-0.15em] w-[8px] h-[1em] bg-current/70 rounded-sm"
+                  />
+                )}
 
-                  <ShareButtons content={normalizedForShare} chatTitle={chatTitle} shareSlug={shareSlug} chatId={message.chat_id} messageId={message.id} />
-                </div>
+                <ShareButtons content={normalizedForShare} chatTitle={chatTitle} shareSlug={shareSlug} chatId={message.chat_id} messageId={message.id} />
               </div>
             ) : (
               <div className="ml-auto w-fit max-w-[85%] sm:max-w-[70%] group">
