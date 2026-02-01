@@ -11,6 +11,7 @@ import AiInput from "@/components/ui/ai-input";
 import { handleFileUpload } from "@/lib/upload-client";
 import { sanitizeUserText, sanitizeAIText, sanitizeSearchQuery } from "@/lib/sanitize";
 import { generateChatTitleFromUserInput } from "@/lib/title";
+import { useChatScroll } from "@/hooks/chat/useChatScroll";
 
 type Message = {
     id: string;
@@ -57,12 +58,7 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
     const [useSearch, setUseSearch] = useState(false);
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
     const [isCodeRequest, setIsCodeRequest] = useState(false);
-    // Track input footer height to avoid overlap with messages
-    const inputContainerRef = useRef<HTMLDivElement>(null);
-    const [inputHeight, setInputHeight] = useState<number>(160);
     const contentRef = useRef<HTMLDivElement>(null);
     const [attachedFile, setAttachedFile] = useState<File | null>(null);
     const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
@@ -73,7 +69,15 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
     const [isStreaming, setIsStreaming] = useState<boolean>(false);
     const streamingContainerRef = useRef<HTMLDivElement>(null);
     const streamingTextNodeRef = useRef<Text | null>(null);
-    const shouldAutoScrollRef = useRef<boolean>(true);
+
+    // Extracted scroll/resize logic
+    const {
+        messagesEndRef,
+        inputContainerRef,
+        inputHeight,
+        scrollToBottom,
+        shouldAutoScrollRef
+    } = useChatScroll(messages, isLoading, isStreaming);
 
     const supabase = useMemo(
         () =>
@@ -207,53 +211,7 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
         };
     }, [chatId, supabase]);
 
-    useEffect(() => {
-        if (shouldAutoScroll) scrollToBottom(isLoading ? "auto" : "smooth");
-    }, [messages, shouldAutoScroll, isLoading]);
 
-    // Auto-scroll when streaming starts
-    useEffect(() => {
-        if (isStreaming && shouldAutoScroll) {
-            scrollToBottom("auto");
-        }
-    }, [isStreaming, shouldAutoScroll]);
-
-    // Track whether user is near the bottom of the <main id="app-scroll"> container
-    useEffect(() => {
-        const scroller = document.getElementById('app-scroll');
-        if (!scroller) return;
-        const handleScroll = () => {
-            const threshold = 100; // px from bottom to consider "at bottom"
-            const atBottom =
-                scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < threshold;
-            setShouldAutoScroll(atBottom);
-            shouldAutoScrollRef.current = atBottom;
-        };
-        scroller.addEventListener('scroll', handleScroll);
-        // Initialize state based on current position
-        handleScroll();
-        return () => scroller.removeEventListener('scroll', handleScroll);
-    }, []);
-
-    // Observe input footer height changes and apply bottom padding to content
-    useEffect(() => {
-        const el = inputContainerRef.current;
-        if (!el || typeof ResizeObserver === 'undefined') return;
-        const ro = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                const h = Math.ceil(entry.contentRect.height);
-                setInputHeight(h);
-            }
-        });
-        ro.observe(el);
-        // Initialize immediately
-        setInputHeight(Math.ceil(el.getBoundingClientRect().height));
-        return () => ro.disconnect();
-    }, []);
-
-    const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
-        messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
-    };
 
     // Initialize/cleanup streaming DOM text node when streaming toggles
     useEffect(() => {
