@@ -46,14 +46,14 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
   useEffect(() => {
     const fetchChats = async () => {
       setIsLoading(true);
-      
+
       // Get current user
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
         setIsLoading(false);
         return;
       }
-      
+
       // Fetch only chats belonging to the current user
       const { data: chatsData, error } = await supabase
         .from("chats")
@@ -129,7 +129,7 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
     }
 
     // Update local state
-    setChats(chats.map(chat => 
+    setChats(chats.map(chat =>
       chat.id === selectedChat.id ? { ...chat, title: newChatName } : chat
     ));
 
@@ -186,9 +186,9 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="absolute right-1 top-1.5 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <MoreVertical className="h-4 w-4" />
@@ -199,7 +199,7 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
                   <Pencil className="mr-2 h-4 w-4" />
                   Rename
                 </DropdownMenuItem>
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={() => handleChatAction({ type: "delete", chatId: chat.id })}
                   className="text-destructive focus:text-destructive"
                 >
@@ -229,16 +229,16 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
   const Panel = () => (
     <div className="flex h-full flex-col">
       <div className="flex flex-col space-y-4 p-4 pt-10">
-        <Button 
-          variant="outline" 
-          className="flex justify-start gap-2 h-9 w-full border border-muted-foreground/20 text-sm" 
+        <Button
+          variant="outline"
+          className="flex justify-start gap-2 h-9 w-full border border-muted-foreground/20 text-sm"
           onClick={createNewChat}
         >
           <Plus className="h-4 w-4" />
           <span>New chat</span>
         </Button>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto px-3">
         <div className="mb-1 text-xs font-medium text-muted-foreground ml-3 mt-3">Menu</div>
         <div className="space-y-1 mb-4">
@@ -259,7 +259,7 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
             Reason Code
           </Button>
         </div>
-        
+
         <div className="mb-1 text-xs font-medium text-muted-foreground ml-3 mt-3">Chats</div>
         <ChatList />
       </div>
@@ -314,19 +314,19 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
       {variant === "panel" ? (
         <Panel />
       ) : (
-        <div className="hidden w-60 border-r bg-gray-50 dark:bg-card md:block p-2">
+        <div className="hidden w-64 border-r bg-gray-50 dark:bg-card md:block p-2">
           <div className="flex h-full flex-col">
             <div className="flex flex-col space-y-4 p-2">
-              <Button 
-                variant="outline" 
-                className="flex justify-start gap-2 h-9 w-full border border-muted-foreground/20 text-sm" 
+              <Button
+                variant="outline"
+                className="flex justify-start gap-2 h-9 w-full border border-muted-foreground/20 text-sm"
                 onClick={createNewChat}
               >
                 <Plus className="h-4 w-4" />
                 <span>New chat</span>
               </Button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto px-1">
               <div className="mb-1 text-xs font-medium text-muted-foreground ml-3 mt-3">Menu</div>
               <div className="space-y-1 mb-4">
@@ -347,7 +347,7 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
                   Reason Code
                 </Button>
               </div>
-              
+
               <div className="mb-1 text-xs font-medium text-muted-foreground ml-3 mt-3">Chats</div>
               <ChatList />
             </div>

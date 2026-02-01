@@ -4,6 +4,7 @@ import { useChatHistory } from "@/hooks/chat/useChatHistory";
 import { useChatActions } from "@/hooks/chat/useChatActions";
 import { useChatScroll } from "@/hooks/chat/useChatScroll";
 import ChatMessage from "@/components/chat/ChatMessage";
+import { EmptyState } from "@/components/chat/EmptyState";
 import SearchResults from "@/components/search-results";
 import AiInput from "@/components/ui/ai-input";
 
@@ -62,14 +63,7 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
             <div className="flex-1 overflow-y-auto w-full pb-[200px]" id="app-scroll">
                 <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
                     {messages.length === 0 && !isLoadingMessages ? (
-                        <div className="flex flex-col items-center justify-center text-center h-full pt-20">
-                            <h2 className="mb-2 text-2xl font-bold flex items-center">
-                                Welcome to <span className="ml-2 text-yellow-500">Acadlabs</span>
-                            </h2>
-                            <p className="mb-8 text-muted-foreground">
-                                Mulai ngobrol dengan personal AI kamu.
-                            </p>
-                        </div>
+                        <EmptyState setInput={setInput} />
                     ) : (
                         messages.map((msg, i) => (
                             <ChatMessage
@@ -94,7 +88,7 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
 
             <div
                 ref={inputContainerRef}
-                className="fixed bottom-0 md:left-[240px] left-0 right-0 z-20 bg-gradient-to-t from-background via-background to-transparent pt-10 pb-6 px-4"
+                className="fixed bottom-0 md:left-64 left-0 right-0 z-20 bg-background/80 backdrop-blur-xl border-t border-zinc-200/50 dark:border-zinc-800/50 pt-3 pb-4 px-4"
             >
                 <div className="max-w-3xl mx-auto space-y-4">
                     {searchResults.length > 0 && <SearchResults results={searchResults} />}
