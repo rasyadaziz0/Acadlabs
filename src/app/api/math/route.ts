@@ -1,76 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sanitizeUserText, sanitizeAIText, normalizeWhitespaceKeepEdges } from "@/lib/sanitize";
+import {
+  ChatRole,
+  ChatMessage,
+  GroqChatRequest,
+  getGroqKeys,
+  callGroqWithFallback,
+} from "@/lib/ai-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type ChatRole = "system" | "user" | "assistant";
-type ChatMessage = { role: ChatRole; content: string };
-type GroqChatRequest = {
-  model: string;
-  messages: ChatMessage[];
-  temperature?: number;
-  stream?: boolean;
-  max_tokens?: number;
-};
+
 
 const HARD_TRUNCATE_SUFFIX = "\n...[truncated]";
 const SERVER_MAX_OUTPUT_CHARS = 220_000;
 
-function getGroqKeys(): string[] {
-  const keys: string[] = [];
-  if (process.env.GROQ_API_KEY) keys.push(process.env.GROQ_API_KEY);
-  if (process.env.GROQ_API_KEY_1) keys.push(process.env.GROQ_API_KEY_1);
-  if (process.env.GROQ_API_KEY_2) keys.push(process.env.GROQ_API_KEY_2);
-  return Array.from(new Set(keys.filter(Boolean)));
-}
 
-async function callGroqWithFallback(body: GroqChatRequest, signal?: AbortSignal): Promise<Response> {
-  const keys = getGroqKeys();
-  const url = "https://api.groq.com/openai/v1/chat/completions";
-  let lastResponse: Response | null = null;
-
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i]!;
-    let res: Response | null = null;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify(body),
-        signal,
-      });
-    } catch (e) {
-      if (i < keys.length - 1) {
-        continue;
-      }
-      return new Response(JSON.stringify({ error: "Upstream network error" }), {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (res.ok) return res;
-
-    lastResponse = res;
-    if (i < keys.length - 1 && [401, 402, 403, 429].includes(res.status)) {
-      continue; // try next key
-    } else {
-      break; // return this failure
-    }
-  }
-
-  return (
-    lastResponse ||
-    new Response(JSON.stringify({ error: "No GROQ API key configured" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    })
-  );
-}
 
 function isChatMessage(val: unknown): val is ChatMessage {
   if (!val || typeof val !== "object") return false;
@@ -226,12 +172,12 @@ export async function POST(request: NextRequest) {
         let buffer = "";
         const keepAliveMs = Number(process.env.SSE_KEEPALIVE_MS) || 15000;
         const sendKeepAlive = () => {
-          try { controller.enqueue(encoder.encode(": keep-alive\n\n")); } catch {}
+          try { controller.enqueue(encoder.encode(": keep-alive\n\n")); } catch { }
         };
-        try { controller.enqueue(encoder.encode(`retry: ${keepAliveMs}\n\n`)); } catch {}
+        try { controller.enqueue(encoder.encode(`retry: ${keepAliveMs}\n\n`)); } catch { }
         sendKeepAlive();
-        const abortHandler = () => { try { reader.cancel(); } catch {} };
-        try { request.signal.addEventListener("abort", abortHandler); } catch {}
+        const abortHandler = () => { try { reader.cancel(); } catch { } };
+        try { request.signal.addEventListener("abort", abortHandler); } catch { }
         let keepAliveTimer: ReturnType<typeof setInterval> = setInterval(sendKeepAlive, keepAliveMs);
         let sawDone = false;
         try {
@@ -275,12 +221,12 @@ export async function POST(request: NextRequest) {
             if (sawDone) break;
           }
         } catch {
-          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'stream_error' })}\n\n`)); } catch {}
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'stream_error' })}\n\n`)); } catch { }
         } finally {
-          try { clearInterval(keepAliveTimer); } catch {}
-          try { request.signal.removeEventListener("abort", abortHandler); } catch {}
-          try { controller.close(); } catch {}
-          try { await reader.cancel(); } catch {}
+          try { clearInterval(keepAliveTimer); } catch { }
+          try { request.signal.removeEventListener("abort", abortHandler); } catch { }
+          try { controller.close(); } catch { }
+          try { await reader.cancel(); } catch { }
         }
       },
     });

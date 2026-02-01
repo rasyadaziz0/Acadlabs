@@ -1,12 +1,6 @@
-export async function refineWithGPToss(input: string): Promise<string> {
-  function getGroqKeys(): string[] {
-    const keys: string[] = [];
-    if (process.env.GROQ_API_KEY) keys.push(process.env.GROQ_API_KEY);
-    if (process.env.GROQ_API_KEY_1) keys.push(process.env.GROQ_API_KEY_1);
-    if (process.env.GROQ_API_KEY_2) keys.push(process.env.GROQ_API_KEY_2);
-    return Array.from(new Set(keys.filter(Boolean)));
-  }
+import { callGroqWithFallback, getGroqKeys } from "@/lib/ai-service";
 
+export async function refineWithGPToss(input: string): Promise<string> {
   const keys = getGroqKeys();
   if (keys.length === 0) {
     throw new Error("Missing GROQ API key(s) in server environment");
@@ -14,7 +8,7 @@ export async function refineWithGPToss(input: string): Promise<string> {
 
   const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
-  const messages = [
+  const messages: { role: "system" | "user"; content: string }[] = [
     {
       role: "system",
       content: [
@@ -31,46 +25,15 @@ export async function refineWithGPToss(input: string): Promise<string> {
     },
   ];
 
-  const url = "https://api.groq.com/openai/v1/chat/completions";
-  let res: Response | null = null;
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i]!;
-    let attempt: Response | null = null;
-    try {
-      attempt = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: 0.3,
-          stream: false,
-        }),
-      });
-    } catch (e) {
-      // Network error; try next key if available
-      if (i < keys.length - 1) {
-        continue;
-      }
-      throw new Error("Upstream network error");
-    }
-    if (attempt.ok) {
-      res = attempt;
-      break;
-    }
-    res = attempt;
-    if (i < keys.length - 1 && [401, 402, 403, 429].includes(attempt.status)) {
-      continue; // try next key
-    } else {
-      break;
-    }
-  }
+  const res = await callGroqWithFallback({
+    model,
+    messages,
+    temperature: 0.3,
+    stream: false,
+  });
 
-  if (!res || !res.ok) {
-    const text = res ? await res.text() : "";
+  if (!res.ok) {
+    const text = await res.text();
     try {
       const j = JSON.parse(text);
       throw new Error(j?.error?.message || j?.message || `Groq API error (${res?.status ?? 500})`);

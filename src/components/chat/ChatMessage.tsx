@@ -7,8 +7,9 @@ import AttachmentPreview, { type AttachmentMeta } from "./AttachmentPreview";
 import ShareButtons from "./share/ShareButtons";
 import { Copy, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
-import { createBrowserClient } from "@supabase/ssr";
 import { sanitizeUserText } from "@/lib/sanitize";
+import { parseAttachmentMarker, composeAttachmentMarker } from "@/lib/message-parser";
+import { useMessageActions } from "@/hooks/useMessageActions";
 
 export type Message = {
   id: string;
@@ -21,26 +22,7 @@ export type Message = {
 
 export type ChatMessageProps = { message?: Message; showCaret?: boolean; isStreaming?: boolean; chatTitle?: string; shareSlug?: string; onMessageUpdated?: (m: Message) => void; onResend?: (m: Message) => void };
 
-const parseAttachmentMarker = (text: string): { meta?: AttachmentMeta; body: string } => {
-  if (!text) return { body: "" };
-  const re = /^::attachment\[([^\]]+)\]\s*\n?/;
-  const m = text.match(re);
-  if (!m) return { body: text };
-  const kv = m[1].split(/\s*,\s*/).map((p) => p.split("=").map((s) => s.trim())) as [string, string][];
-  const meta: AttachmentMeta = { name: "" } as any;
-  for (const [k, v] of kv) {
-    const val = v?.replace(/^"|"$/g, "");
-    if (k === "name") meta.name = val;
-    else if (k === "type") meta.type = val;
-    else if (k === "size") meta.size = Number(val);
-  }
-  if (meta.name && !meta.ext) {
-    const i = meta.name.lastIndexOf(".");
-    if (i >= 0) meta.ext = meta.name.slice(i + 1).toUpperCase();
-  }
-  const body = text.replace(re, "");
-  return { meta, body };
-};
+
 
 function ChatMessage({ message, showCaret = false, isStreaming = false, chatTitle, shareSlug, onMessageUpdated, onResend }: ChatMessageProps) {
   if (!message) return null;
@@ -49,26 +31,7 @@ function ChatMessage({ message, showCaret = false, isStreaming = false, chatTitl
   const [normalizedForShare, setNormalizedForShare] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState<string>(body);
-  const [saving, setSaving] = useState(false);
-
-  const supabase = useMemo(
-    () =>
-      createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      ),
-    []
-  );
-
-  const composeAttachmentMarker = (meta?: AttachmentMeta) => {
-    if (!meta || !meta.name) return "";
-    const rawName = meta.name || "file";
-    const rawType = meta.type || "application/octet-stream";
-    const safeName = sanitizeUserText(rawName).replace(/"/g, '\\"').replace(/\n|\r/g, " ").slice(0, 200);
-    const safeType = sanitizeUserText(rawType).replace(/"/g, '\\"').replace(/\n|\r/g, " ").slice(0, 100);
-    const size = Number(meta.size || 0);
-    return `::attachment[name="${safeName}",type="${safeType}",size=${size}]`;
-  };
+  const { updateMessageContent, saving } = useMessageActions();
 
   const handleCopy = async () => {
     const text = body || "";
@@ -94,28 +57,13 @@ function ChatMessage({ message, showCaret = false, isStreaming = false, chatTitl
     const clean = sanitizeUserText(draft || "").trim();
     const newContent = `${attachment && attachment.name ? composeAttachmentMarker(attachment) + (clean ? "\n" : "") : ""}${clean}`;
     try {
-      setSaving(true);
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user || userData.user.id !== message.user_id) {
-        toast.error("Tidak bisa mengedit pesan ini");
-        return;
-      }
-      const { data: updated, error } = await supabase
-        .from("messages")
-        .update({ content: newContent })
-        .eq("id", message.id)
-        .eq("user_id", userData.user.id)
-        .select("*")
-        .single();
-      if (error) throw error;
+      const updated = await updateMessageContent(message.id, message.user_id, newContent);
       onMessageUpdated?.(updated as Message);
       onResend?.(updated as Message);
       setIsEditing(false);
       toast.success("Pesan diperbarui");
-    } catch (e) {
-      toast.error("Gagal menyimpan perubahan");
-    } finally {
-      setSaving(false);
+    } catch {
+      // toast handled in hook
     }
   };
 

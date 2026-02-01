@@ -1,129 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sanitizeUserText, sanitizeAIText, normalizeWhitespaceKeepEdges } from "@/lib/sanitize";
+import {
+  ChatRole,
+  ChatMessage,
+  GroqChatRequest,
+  getGroqKeys,
+  callGroqWithFallback,
+} from "@/lib/ai-service";
+import { trimMessagesForBudget } from "@/lib/token-utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type ChatRole = "system" | "user" | "assistant";
-type ChatMessage = { role: ChatRole; content: string };
-type GroqChatRequest = {
-  model: string;
-  messages: ChatMessage[];
-  temperature?: number;
-  stream?: boolean;
-  max_tokens?: number;
-};
 
-// Approximate token counting and context trimming to avoid exceeding TPM/quotas
-function approxTokens(s: string): number {
-  const str = typeof s === "string" ? s : String(s ?? "");
-  return Math.ceil(str.length / 4); // rough heuristic
-}
 
-function trimMessagesForBudget(
-  messages: ChatMessage[],
-  maxInputTokens: number
-): ChatMessage[] {
-  if (!Array.isArray(messages) || messages.length === 0) return [];
-  const first = messages[0];
-  const hasSystem = first && first.role === "system";
-  const systemMsg = hasSystem ? first : null;
-  const rest = hasSystem ? messages.slice(1) : messages.slice();
 
-  let used = systemMsg ? approxTokens(String(systemMsg.content || "")) : 0;
-  const picked: ChatMessage[] = [];
 
-  for (let i = rest.length - 1; i >= 0; i--) {
-    const m = rest[i];
-    const c = String(m?.content ?? "");
-    const t = approxTokens(c);
-    if (used + t <= maxInputTokens || picked.length === 0) {
-      // Always include at least the most recent message
-      picked.push({ role: m.role, content: c });
-      used += t;
-    } else {
-      break;
-    }
-  }
-  picked.reverse();
 
-  const result: ChatMessage[] = systemMsg
-    ? [{ role: systemMsg.role, content: String(systemMsg.content || "") }, ...picked]
-    : picked;
-
-  // If we still exceed the budget, truncate the last (most recent) message tail
-  const totalTokens = result.reduce((sum, m) => sum + approxTokens(String(m.content || "")), 0);
-  if (totalTokens > maxInputTokens && result.length > 0) {
-    const lastIdx = result.length - 1;
-    const last = result[lastIdx];
-    const over = totalTokens - maxInputTokens;
-    const content = String(last.content || "");
-    const keepChars = Math.max(0, content.length - over * 4);
-    result[lastIdx] = { ...last, content: content.slice(-keepChars) };
-  }
-
-  return result;
-}
-
-function getGroqKeys(): string[] {
-  const keys: string[] = [];
-  if (process.env.GROQ_API_KEY) keys.push(process.env.GROQ_API_KEY);
-  if (process.env.GROQ_API_KEY_1) keys.push(process.env.GROQ_API_KEY_1);
-  if (process.env.GROQ_API_KEY_2) keys.push(process.env.GROQ_API_KEY_2);
-  // De-duplicate and filter empties
-  return Array.from(new Set(keys.filter(Boolean)));
-}
-
-async function callGroqWithFallback(body: GroqChatRequest, signal?: AbortSignal): Promise<Response> {
-  const keys = getGroqKeys();
-  const url = "https://api.groq.com/openai/v1/chat/completions";
-  let lastResponse: Response | null = null;
-
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i]!;
-    let res: Response | null = null;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify(body),
-        signal,
-      });
-    } catch (e) {
-      // Network error; try next key if available
-      if (i < keys.length - 1) {
-        continue;
-      }
-      // No more keys; synthesize a 502 response
-      return new Response(JSON.stringify({ error: "Upstream network error" }), {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (res.ok) return res;
-
-    lastResponse = res;
-    // Only fallback on auth/quota/rate-limit type failures
-    if (i < keys.length - 1 && [401, 402, 403, 429].includes(res.status)) {
-      continue; // try next key
-    } else {
-      break; // return this failure
-    }
-  }
-
-  // If no keys or all failed, return the last failure (or a synthetic 500)
-  return (
-    lastResponse ||
-    new Response(JSON.stringify({ error: "No GROQ API key configured" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    })
-  );
-}
 
 function isChatMessage(val: unknown): val is ChatMessage {
   if (!val || typeof val !== "object") return false;
@@ -296,16 +189,16 @@ export async function POST(request: NextRequest) {
           // Periodic SSE keep-alive comments to prevent idle timeouts on proxies/browsers
           const keepAliveMs = Number(process.env.SSE_KEEPALIVE_MS) || 15000;
           const sendKeepAlive = () => {
-            try { controller.enqueue(encoder.encode(": keep-alive\n\n")); } catch {}
+            try { controller.enqueue(encoder.encode(": keep-alive\n\n")); } catch { }
           };
           // Send an initial keep-alive to open the stream promptly
           // Also advise client on reconnection delay if needed
-          try { controller.enqueue(encoder.encode(`retry: ${keepAliveMs}\n\n`)); } catch {}
+          try { controller.enqueue(encoder.encode(`retry: ${keepAliveMs}\n\n`)); } catch { }
           sendKeepAlive();
           const abortHandler = () => {
-            try { reader.cancel(); } catch {}
+            try { reader.cancel(); } catch { }
           };
-          try { request.signal.addEventListener("abort", abortHandler); } catch {}
+          try { request.signal.addEventListener("abort", abortHandler); } catch { }
           let keepAliveTimer: ReturnType<typeof setInterval> = setInterval(sendKeepAlive, keepAliveMs);
           let sawDone = false;
           try {
@@ -352,29 +245,29 @@ export async function POST(request: NextRequest) {
           } catch (e) {
             // On error, terminate stream
           } finally {
-            try { clearInterval(keepAliveTimer); } catch {}
-            try { request.signal.removeEventListener("abort", abortHandler); } catch {}
-            try { controller.close(); } catch {}
-            try { await reader.cancel(); } catch {}
+            try { clearInterval(keepAliveTimer); } catch { }
+            try { request.signal.removeEventListener("abort", abortHandler); } catch { }
+            try { controller.close(); } catch { }
+            try { await reader.cancel(); } catch { }
           }
         },
       });
 
-  return new Response(stream, { status: 200, headers });
-}
+      return new Response(stream, { status: 200, headers });
+    }
 
-// Non-streaming: return sanitized JSON
-const json = await response.json();
-const choice = json?.choices?.[0] || {};
-const rawContent: string = (choice.message?.content as string) || (choice.text as string) || "";
-const content = sanitizeAIText(rawContent);
-return NextResponse.json({ content });
-} catch (error: unknown) {
-  console.error("Chat API error:", error);
-  const errorMessage = error instanceof Error ? error.message : "Failed to process request";
-  return NextResponse.json(
-    { error: { message: errorMessage } },
-    { status: 500 }
-  );
-}
+    // Non-streaming: return sanitized JSON
+    const json = await response.json();
+    const choice = json?.choices?.[0] || {};
+    const rawContent: string = (choice.message?.content as string) || (choice.text as string) || "";
+    const content = sanitizeAIText(rawContent);
+    return NextResponse.json({ content });
+  } catch (error: unknown) {
+    console.error("Chat API error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to process request";
+    return NextResponse.json(
+      { error: { message: errorMessage } },
+      { status: 500 }
+    );
+  }
 }
