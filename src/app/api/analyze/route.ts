@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
           {
             ok: true,
             gemini: geminiText,
-            model: { gemini: process.env.GEMINI_MODEL || "gemini-1.5-flash" },
+            model: { gemini: process.env.GEMINI_MODEL || "gemini-2.5-flash" },
             meta: { mimeType, size: file.size },
           },
           { headers: { "X-Refine-Error": err?.message || "Refinement failed" } }
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
       gemini: geminiText,
       refined,
       model: {
-        gemini: process.env.GEMINI_MODEL || "gemini-1.5-flash",
+        gemini: process.env.GEMINI_MODEL || "gemini-2.5-flash",
         ...(refined ? { gptoss: process.env.GROQ_MODEL || "openai/gpt-oss-120b" } : {}),
       },
       meta: {
