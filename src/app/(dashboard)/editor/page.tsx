@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import ChatMessage from "@/components/chat-message";
-import type { Message as ChatMessageType } from "@/components/chat-message";
+import ChatMessage from "@/components/chat/ChatMessage";
+import type { Message as ChatMessageType } from "@/components/chat/ChatMessage";
 import AiInput from "@/components/ui/ai-input";
 import { sanitizeUserText } from "@/lib/sanitize";
 
@@ -175,7 +175,7 @@ export default function EditorPage() {
           // Execute the code in a safe context
           const executeCode = new Function('console', code);
           executeCode(mockConsole);
-          
+
           setOutput(consoleOutput.join('\n'));
         } catch (error) {
           setError(`Execution error: ${error instanceof Error ? error.message : String(error)}`);

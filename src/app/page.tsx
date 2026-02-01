@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import AiInput from "@/components/ui/ai-input";
-import ChatMessage from "@/components/chat-message";
+import ChatMessage from "@/components/chat/ChatMessage";
 import { handleFileUpload } from "@/lib/upload-client";
 import {
   AlertDialog,

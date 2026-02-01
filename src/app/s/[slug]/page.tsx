@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-import ChatMessage, { type Message } from "@/components/chat-message";
+import ChatMessage, { type Message } from "@/components/chat/ChatMessage";
 
 function dedupeAndSort(arr: Message[]) {
   const seen = new Set<string>();
