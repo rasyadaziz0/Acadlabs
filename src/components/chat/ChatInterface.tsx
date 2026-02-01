@@ -12,6 +12,7 @@ interface ChatInterfaceProps {
     initialChatId?: string;
 }
 
+// Force hydration refresh
 export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
     const {
         messages,
@@ -60,7 +61,7 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
 
     return (
         <div className="flex flex-col h-full relative" id="app-scroll">
-            <div className="flex-1 overflow-y-auto w-full pb-36" id="app-scroll">
+            <div className="flex-1 overflow-y-auto w-full pb-[9rem]" id="app-scroll">
                 <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
                     {messages.length === 0 && !isLoadingMessages ? (
                         <EmptyState setInput={setInput} />

@@ -1,3 +1,4 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 import { sanitizeUserText, sanitizeAIText, normalizeWhitespaceKeepEdges } from "@/lib/sanitize";
 import {
@@ -11,12 +12,6 @@ import { trimMessagesForBudget } from "@/lib/token-utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-
-
-
-
-
 
 function isChatMessage(val: unknown): val is ChatMessage {
   if (!val || typeof val !== "object") return false;
@@ -32,6 +27,24 @@ function isChatMessage(val: unknown): val is ChatMessage {
 export async function POST(request: NextRequest) {
   try {
     const { messages, searchResults } = (await request.json()) as Record<string, unknown>;
+
+    // Init Supabase & Get User Context
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name) {
+            return request.cookies.get(name)?.value;
+          },
+        },
+      }
+    );
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || "Teman";
 
     // Validate request
     if (!messages || !Array.isArray(messages)) {
@@ -73,6 +86,22 @@ export async function POST(request: NextRequest) {
       return { role: msg.role, content: normalizeWhitespaceKeepEdges(raw) };
     });
 
+    // Define Persona
+    const systemPersona: ChatMessage = {
+      role: "system",
+      content: `You are AcadLabs, a smart, friendly, and helpful academic AI companion.
+
+Tone: Professional yet conversational, encouraging, and empathetic. Avoid being overly robotic.
+
+Identity: Always refer to yourself as AcadLabs. You were created by the AcadLabs team.
+
+Context: You are talking to ${userName}. Use their name occasionally to make it personal, but don't overdo it.
+
+Goal: Help them with coding, math, or general knowledge. If they are stuck, guide them step-by-step.
+
+Language: Adapt to the user's language (Indonesian/English). If Indonesian, use natural phrasing (not stiff formal translated text).`
+    };
+
     // Add system instruction to ensure math renders correctly with KaTeX
     const systemFormattingInstruction: ChatMessage = {
       role: "system",
@@ -103,8 +132,8 @@ export async function POST(request: NextRequest) {
         "- Jangan keluarin teks di luar aturan ini.",
       ].join("\\n"),
     };
-    // Prepend the system instruction
-    const finalMessages = [systemFormattingInstruction, ...formattedMessages];
+    // Prepend the system instructions
+    const finalMessages = [systemPersona, systemFormattingInstruction, ...formattedMessages];
 
     // Add search results context if available
     if (Array.isArray(searchResults) && searchResults.length > 0) {
