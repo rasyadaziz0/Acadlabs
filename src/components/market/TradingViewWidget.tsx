@@ -20,11 +20,9 @@ const TradingViewWidget = ({ symbol }: TradingViewWidgetProps) => {
             return "OANDA:XAUUSD";
         }
 
-        // 2. Crypto (Usually ends with -USD in our app logic)
-        // Map "BTC-USD" -> "BINANCE:BTCUSDT"
-        if (s.endsWith("-USD")) {
-            const coin = s.replace("-USD", "");
-            return `${coin}`;
+        if (s.endsWith("USD")) {
+            const coin = s.replace("USD", "");
+            return `${coin}USDT`;
         }
 
         // 3. Indo Stocks (Ends with .JK)
@@ -35,10 +33,6 @@ const TradingViewWidget = ({ symbol }: TradingViewWidgetProps) => {
         }
 
         // 4. Default / US Stocks
-        // Stick to NASDAQ if no specific prefix, or let TV handle it.
-        // Usually good to try NASDAQ or NYSE, but just returning raw might be safer if unsure?
-        // User requested: Default -> "NASDAQ:" or simple.
-        // Let's prepend NASDAQ if it looks like a ticker (letters only).
         if (/^[A-Z]+$/.test(s)) {
             return `${s}`;
         }
@@ -64,11 +58,12 @@ const TradingViewWidget = ({ symbol }: TradingViewWidgetProps) => {
             "autosize": true,
             "symbol": tvSymbol,
             "interval": "D",
-            "timezone": "Etc/UTC",
+            "timezone": "Asia/Jakarta",
             "theme": isDark ? "dark" : "light",
             "style": "1",
-            "locale": "en",
+            "locale": "id",
             "enable_publishing": false,
+            "hide_top_toolbar": false,
             "allow_symbol_change": true,
             "calendar": false,
             "support_host": "https://www.tradingview.com"

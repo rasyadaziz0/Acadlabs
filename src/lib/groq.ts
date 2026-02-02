@@ -53,49 +53,47 @@ export async function analyzeMarketDataWithGroq(symbol: string, marketData: stri
     throw new Error("Missing GROQ API key(s) in server environment");
   }
 
-  const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+  // CONSTRAINT 1: Wajib menggunakan model openai/gpt-oss-120b
+  const model = "openai/gpt-oss-120b";
+
+  const systemPrompt = `
+    Anda adalah Market Analyst Professional.
+    Tugas: Analisis data market berikut dan berikan insight singkat.
+
+    ATURAN WAJIB:
+    1. SPASI: Pastikan ada spasi antara teks dan angka/bold.
+      - Contoh: "Target: **35.00** USD" (Jangan nempel).
+    2. MARKDOWN:
+      - Gunakan format standard (**bold**, ### Header).
+      - Jangan gunakan karakter aneh seperti '∗'.
+
+    Struktur Analisis:
+    ### 📊 Analisis [Simbol]
+    - **Tren:** [Bullish/Bearish]
+    - **Setup:** [Pola Chart]
+
+    ### 🎯 Key Levels
+    - **Resistance:** [Harga]
+    - **Support:** [Harga]
+
+    ### ⚡ Sinyal
+    - **Action:** [BUY/SELL/WAIT]
+    - **Entry:** [Area]
+    - **Target:** [Harga]
+    - **SL:** [Harga]
+  `;
+
+  const userPrompt = `Tolong analisis aset ${symbol} berdasarkan data berikut:\n\n${marketData}`;
 
   const messages: { role: "system" | "user"; content: string }[] = [
-    {
-      role: "system",
-      content: [
-        "Anda adalah Trader Profesional.",
-        "Analisis data OHLCV berikut. Output WAJIB MURNI MARKDOWN.",
-        "DILARANG MENGGUNAKAN FORMAT TABEL (MARKDOWN TABLE) ATAU KARAKTER PIPE ('|').",
-        "Gunakan Format List/Bullet Points untuk data.",
-        "Gunakan 'Double Newline' (\\n\\n) antar poin agar tampilan tidak dempet.",
-        "Format Wajib:",
-        "# Judul Analisis",
-        "",
-        "## 🚦 Sentimen",
-        "(Spasi kosong)",
-        "- Poin Sentimen 1",
-        "",
-        "## 🎯 Key Levels",
-        "(Spasi kosong)",
-        "- Support: [Harga]",
-        "- Resistance: [Harga]",
-        "",
-        "## 🧠 Insight",
-        "(Spasi kosong)",
-        "- Analisis mendalam...",
-        "",
-        "## ⚡ Rekomendasi",
-        "(Spasi kosong)",
-        "- Action: [BUY/SELL]",
-        "- Target: [Harga]",
-      ].join("\n"),
-    },
-    {
-      role: "user",
-      content: `Symbol: ${symbol}\nData 14 Hari Terakhir:\n${marketData}`,
-    },
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
   ];
 
   const res = await callGroqWithFallback({
     model,
     messages,
-    temperature: 0.5,
+    temperature: 0.5, // Agak rendah agar patuh aturan formatting
     stream: false,
   });
 
@@ -110,6 +108,19 @@ export async function analyzeMarketDataWithGroq(symbol: string, marketData: stri
   }
 
   const data = await res.json();
-  const content = data?.choices?.[0]?.message?.content;
-  return (typeof content === "string" ? content : "").trim();
+  const rawContent = data?.choices?.[0]?.message?.content || "";
+
+  if (!rawContent) return "Maaf, analisis gagal dimuat.";
+
+  // CONSTRAINT 2: Regex Post-Processing untuk memaksa spasi
+  const cleanResponse = rawContent
+    .replace(/[ \t]+/g, " ")    // Hapus spasi berlebih tapi biarkan newline
+    .replace(/ : /g, ": ")      // Rapikan titik dua
+    .replace(/ \./g, ".")       // Rapikan titik akhir
+    .replace(/ ,/g, ",")        // Rapikan koma
+    .replace(/\( /g, "(")       // Rapikan kurung buka
+    .replace(/ \)/g, ")")       // Rapikan kurung tutup
+    .trim();
+
+  return cleanResponse;
 }

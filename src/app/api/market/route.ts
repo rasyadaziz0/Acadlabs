@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { analyzeMarketDataWithGroq } from "@/lib/groq";
-import YahooFinance from "yahoo-finance2";
-import { getCryptoData } from "@/lib/coingecko";
+import yahooFinance from "yahoo-finance2"; // Correct Default Import
+import { getCryptoData, CoinGeckoData } from "@/lib/coingecko";
 
 export const runtime = "nodejs";
 
@@ -18,30 +18,30 @@ export async function POST(req: Request) {
         let sourceUsed = "YAHOO";
 
         // === 1. COINGECKO STRATEGY (Priority for Crypto AI) ===
-        let cgData = null;
+        // Smart Cleaning is handled INSIDE getCryptoData()
+        let cgData: CoinGeckoData | null = null;
         if (type === "CRYPTO") {
             try {
-                // Use Raw Symbol for CoinGecko (e.g. "BTC", not "BTC-USD")
-                // The helper is smart enough to handle cleaning now, but passing raw is safer
+                // Kirim Raw Symbol (biar helper yang bersih-bersih)
                 cgData = await getCryptoData(symbol);
 
                 if (cgData) {
                     sourceUsed = "COINGECKO";
                     aiContextData = `
-Data Source: CoinGecko (Priority for Crypto)
-Symbol: ${cgData.symbol}
-Current Price: $${cgData.price}
-Market Cap: $${cgData.marketCap.toLocaleString()}
-24h Volume: $${cgData.volume24h.toLocaleString()}
-24h Change: ${cgData.change24h.toFixed(2)}%
+                        Data Source: CoinGecko (Priority for Crypto)
+                            Symbol: ${cgData.symbol}
+                        Current Price: $${cgData.price}
+                        Market Cap: $${cgData.marketCap.toLocaleString()}
+                        24h Volume: ${cgData.volume24h.toLocaleString()}
+                        24h Change: ${cgData.change24h.toFixed(2)}%
 
-Price History (Last 14 Days):
-${cgData.history.price.map((p: number, i: number) => {
-                        // Safety check for timestamp
+                            Price History (Last 14 Days):
+                        ${cgData.history.price.map((p: number, i: number) => {
                         const ts = cgData?.history.timestamp[i] || Date.now();
                         const date = new Date(ts).toISOString().split('T')[0];
                         return `- ${date}: $${p.toFixed(4)}`;
-                    }).join("\n")}
+                    }).join("\n")
+                        }
                     `.trim();
                 }
             } catch (cgError) {
@@ -49,14 +49,19 @@ ${cgData.history.price.map((p: number, i: number) => {
             }
         }
 
-        // === 2. YAHOO FINANCE STRATEGY (Fallback & Mobile Chart) ===
-        const yahooFinance = new YahooFinance();
+        // === 2. YAHOO FINANCE STRATEGY (Fallback & Stocks) ===
+        // Yahoo always needs specific format, but we start with raw
         let yahooSymbol = symbol.toUpperCase().trim();
 
-        // Yahoo Symbol Mapping
+        // Yahoo Symbol Mapping Logic
         switch (type) {
             case "CRYPTO":
-                if (!yahooSymbol.includes("-")) yahooSymbol += "-USD";
+                // Standard Yahoo logic: needs "-USD"
+                // Jika input "BTC", ubah jadi "BTC-USD"
+                // Jika input "BTC-USD", biarkan.
+                if (!yahooSymbol.includes("-")) {
+                    yahooSymbol = `${yahooSymbol}-USD`;
+                }
                 break;
             case "FOREX":
                 if (["XAU", "GOLD", "XAUUSD"].includes(yahooSymbol)) yahooSymbol = "GC=F";
@@ -69,14 +74,15 @@ ${cgData.history.price.map((p: number, i: number) => {
             const startDate = new Date();
             startDate.setDate(endDate.getDate() - 30);
 
-            const yahooResult = await yahooFinance.historical(yahooSymbol, {
+            // Fetch using default instance (no 'new')
+            const yahooResult: any[] = await yahooFinance.historical(yahooSymbol, {
                 period1: startDate,
                 period2: endDate,
                 interval: "1d",
             });
 
             if (yahooResult && yahooResult.length > 0) {
-                // Populate Mobile Chart Data (Yahoo is usually best for OHLC)
+                // Populate Mobile Chart Data
                 mobileChartData = yahooResult.map((item: any) => ({
                     time: item.date.toISOString().split("T")[0],
                     open: item.open,
@@ -85,12 +91,13 @@ ${cgData.history.price.map((p: number, i: number) => {
                     close: item.close,
                 }));
 
-                // Fallback for AI if CoinGecko failed
+                // Fallback for AI if CoinGecko failed (or if Stock/Forex)
                 if (!aiContextData) {
                     sourceUsed = "YAHOO_FALLBACK";
-                    aiContextData = yahooResult.reverse().slice(0, 14).map((d: any) => {
+                    // create a copy before reversing to avoid mutating the original array
+                    aiContextData = [...yahooResult].reverse().slice(0, 14).map((d: any) => {
                         const dateStr = d.date.toISOString().split("T")[0];
-                        return `- ${dateStr}: Open=${d.open}, High=${d.high}, Low=${d.low}, Close=${d.close}`;
+                        return `- ${dateStr}: Open = ${d.open}, High = ${d.high}, Low = ${d.low}, Close = ${d.close} `;
                     }).join("\n");
                 }
             }
@@ -102,7 +109,7 @@ ${cgData.history.price.map((p: number, i: number) => {
         if (!aiContextData && mobileChartData.length === 0) {
             return NextResponse.json({
                 symbol: symbol,
-                result: `## ⚠️ Data Tidak Ditemukan\n\nMaaf, sistem tidak dapat menemukan data market untuk **${symbol}** di CoinGecko maupun Yahoo Finance.`
+                result: `## ⚠️ Data Tidak Ditemukan\n\nMaaf, sistem tidak dapat menemukan data market untuk ** ${symbol}** di CoinGecko maupun Yahoo Finance.`
             });
         }
 
@@ -110,7 +117,8 @@ ${cgData.history.price.map((p: number, i: number) => {
         const analysis = await analyzeMarketDataWithGroq(symbol, aiContextData);
 
         return NextResponse.json({
-            symbol: symbol, // Return request symbol
+            symbol: symbol,
+            source: sourceUsed,
             result: analysis,
             data: mobileChartData
         });

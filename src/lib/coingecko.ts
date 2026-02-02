@@ -12,10 +12,16 @@ export interface CoinGeckoData {
 
 export async function getCryptoData(symbol: string): Promise<CoinGeckoData | null> {
     try {
-        // 1. Clean Symbol (Remove -USD, lowercase)
-        const cleanSymbol = symbol.replace("-USD", "").toLowerCase().trim();
+        // 1. Aggressive Smart Cleaning (Raw User Input -> Clean Ticker)
+        // Contoh: "HYPEUSDT" -> "HYPE", "BTC-USD" -> "BTC"
+        const cleanSymbol = symbol
+            .toUpperCase()
+            .replace("-USD", "")
+            .replace("USDT", "") // Hapus USDT agar bisa ketemu di CoinGecko
+            .replace("USD", "")  // Hapus USD suffix
+            .trim();
 
-        // 2. Add Headers to avoid Cloudflare Blocking
+        // 2. Headers
         const headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             "Accept": "application/json"
@@ -26,22 +32,26 @@ export async function getCryptoData(symbol: string): Promise<CoinGeckoData | nul
         const searchData = await searchRes.json();
 
         if (!searchData.coins || searchData.coins.length === 0) {
-            console.warn(`CoinGecko: Symbol ${symbol} not found.`);
+            console.warn(`CoinGecko: Symbol ${symbol} (cleaned: ${cleanSymbol}) not found.`);
             return null;
         }
 
-        // 4. Smart Matching: Loop logic to find EXACT symbol
-        // Default to the first result if no exact match found
-        let coinId = searchData.coins[0].id;
+        // 4. Exact Match Priority Logic
+        let coinId = "";
 
-        // Find exact match (e.g. user input "PEPE" -> find symbol "PEPE", ignore "PEPE2.0")
-        const exactMatch = searchData.coins.find((c: any) => c.symbol.toLowerCase() === cleanSymbol);
+        // Cari yang symbol-nya SAMA PERSIS dengan cleanSymbol
+        const exactMatch = searchData.coins.find(
+            (c: any) => c.symbol.toUpperCase() === cleanSymbol
+        );
 
         if (exactMatch) {
             coinId = exactMatch.id;
+        } else {
+            // Fallback: Ambil result pertama
+            coinId = searchData.coins[0].id;
         }
 
-        // 5. Fetch Info (Price, Market Cap, Vol)
+        // 5. Fetch Info
         const priceRes = await fetch(
             `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true`,
             { headers }
@@ -69,7 +79,7 @@ export async function getCryptoData(symbol: string): Promise<CoinGeckoData | nul
         }
 
         return {
-            symbol: symbol.toUpperCase(),
+            symbol: cleanSymbol,
             price: info.usd,
             marketCap: info.usd_market_cap,
             volume24h: info.usd_24h_vol,

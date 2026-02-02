@@ -27,11 +27,8 @@ export default function MarketPage() {
 
     // Quick Mapping logic on Frontend (to align with Backend mostly)
     const processSymbol = () => {
-        let s = symbol.trim().toUpperCase();
-        if (!s) return null;
-        if (type === "CRYPTO" && !s.includes("-")) s += "-USD";
-        if (type === "FOREX" && !["XAU", "GOLD"].includes(s) && !s.endsWith("=X")) s += "=X";
-        return s;
+        // Return raw symbol for API (let backend handle it)
+        return symbol.trim().toUpperCase();
     };
 
     const handleAnalyze = async () => {
@@ -42,8 +39,27 @@ export default function MarketPage() {
         setResult(null);
         setChartData([]);
 
-        // Locked Symbol for Chart
-        setDisplaySymbol(processedSymbol);
+        // MAPPING UNTUK TRADINGVIEW WIDGET
+        let tvSymbol = processedSymbol;
+
+        if (type === "CRYPTO") {
+            // Requirement User: BINANCE:${symbol.replace("-USD","")}USDT
+            // Pastikan formatnya valid untuk Binance (Raw Ticker + USDT)
+            const raw = processedSymbol
+                .replace("-USD", "")
+                .replace("USD", "")
+                .replace("USDT", "") // Clean all to be safe
+                .trim();
+
+            tvSymbol = `BINANCE:${raw}USDT`;
+
+        } else if (type === "STOCK") {
+            // Requirement User: IDX:${symbol} atau default
+            tvSymbol = `IDX:${processedSymbol}`;
+        }
+
+        // Locked Symbol for Chart & Widget
+        setDisplaySymbol(tvSymbol);
 
         try {
             const res = await fetch("/api/market", {

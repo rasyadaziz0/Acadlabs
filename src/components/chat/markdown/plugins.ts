@@ -289,3 +289,13 @@ export function fixAndDecodeEntitiesMinimal(input: string): string {
     return st;
   }
 }
+
+/**
+ * Memperbaiki format bold yang rusak akibat spasi berlebih.
+ * Mengubah "** Teks **" menjadi "**Teks**" agar valid dirender sebagai Bold.
+ */
+export const normalizeBoldSpacing = (text: string) => {
+  if (!text) return text;
+  // Regex: Cari "**", spasi, teks apa saja (kecuali bintang), spasi, lalu "**"
+  return text.replace(/\*\*\s+([^*]+?)\s+\*\*/g, "**$1**");
+};
