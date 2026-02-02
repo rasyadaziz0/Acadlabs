@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { analyzeMarketDataWithGroq } from "@/lib/groq";
+import yahooFinance from "yahoo-finance2";
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
     try {
@@ -12,99 +15,77 @@ export async function POST(req: Request) {
             );
         }
 
-        const apiKey = process.env.ALPHA_VANTAGE_KEY;
-        if (!apiKey) {
-            return NextResponse.json(
-                { error: "Alpha Vantage API key not configured" },
-                { status: 500 }
-            );
-        }
+        let yahooSymbol = symbol.toUpperCase().trim();
 
-        let url = "";
-        // Map type to Alpha Vantage endpoints
-        // Types: 'CRYPTO' | 'FOREX' | 'STOCK'
         switch (type) {
             case "CRYPTO":
-                // For crypto, we often need a market (e.g., USD). Default to USD.
-                url = `https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol=${symbol}&market=USD&apikey=${apiKey}`;
+                // e.g. BTC -> BTC-USD
+                if (!yahooSymbol.includes("-")) {
+                    yahooSymbol += "-USD";
+                }
                 break;
             case "FOREX":
-                // Requires 'from_symbol' and 'to_symbol'. Assuming input like "EUR/USD" or "EUR" (default to USD)
-                // Simple logic: if symbol contains '/', split it. Else assume vs USD.
-                let from = symbol;
-                let to = "USD";
-                if (symbol.includes("/")) {
-                    [from, to] = symbol.split("/");
+                // Special mappings
+                if (yahooSymbol === "XAU" || yahooSymbol === "GOLD") {
+                    yahooSymbol = "GC=F"; // Gold Futures
+                } else if (!yahooSymbol.endsWith("=X")) {
+                    // e.g. EURUSD -> EURUSD=X
+                    // But be careful if it already has it
+                    yahooSymbol += "=X";
                 }
-                url = `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=${from}&to_symbol=${to}&apikey=${apiKey}`;
                 break;
             case "STOCK":
             default:
-                url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${apiKey}`;
+                // Pass through: BBCA.JK, NVDA
                 break;
         }
 
-        const avRes = await fetch(url);
-        if (!avRes.ok) {
-            throw new Error(`Alpha Vantage API error: ${avRes.statusText}`);
-        }
+        // 2. Fetch Historical Data (30 Days)
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - 40); // Buffer for weekends
 
-        const data = await avRes.json();
-
-        // Check for API errors or empty data
-        if (data["Error Message"] || data["Note"]) {
-            console.error("Alpha Vantage Data Error:", data);
-            throw new Error(data["Error Message"] || "Limit reached or invalid symbol");
-        }
-
-        // Process data to get last 14 days
-        // The keys depend on the function used.
-        let timeSeries: any = {};
-        if (type === "CRYPTO") {
-            timeSeries = data["Time Series (Digital Currency Daily)"];
-        } else if (type === "FOREX") {
-            timeSeries = data["Time Series FX (Daily)"];
-        } else {
-            timeSeries = data["Time Series (Daily)"];
-        }
-
-        if (!timeSeries) {
-            throw new Error("No market data found for this symbol");
-        }
-
-        // Get dates, sort desc, take top 14
-        // Get dates, sort desc
-        const allDates = Object.keys(timeSeries).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-
-        // 1. Chart Data (Last 100 points, sorted ASCENDING for lightweight-charts)
-        const chartData = allDates.slice(0, 100).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()).map(date => {
-            const d = timeSeries[date];
-            const getVal = (k: string) => parseFloat(d[Object.keys(d).find(key => key.includes(k))!] || "0");
-            return {
-                time: date,
-                open: getVal("open"),
-                high: getVal("high"),
-                low: getVal("low"),
-                close: getVal("close"),
-            };
+        // Using the default instance as per standard docs
+        const result: any[] = await yahooFinance.historical(yahooSymbol, {
+            period1: startDate,
+            period2: endDate,
+            interval: "1d",
         });
 
-        // 2. AI Analysis Data (Last 14 points, DESCENDING)
-        const aiDates = allDates.slice(0, 14);
-        let formattedData = aiDates.map(date => {
-            const d = timeSeries[date];
-            const getVal = (k: string) => d[Object.keys(d).find(key => key.includes(k))!] || "0";
-            return `- ${date}: Open=${getVal("open")}, High=${getVal("high")}, Low=${getVal("low")}, Close=${getVal("close")}, Vol=${getVal("volume")}`;
+        if (!result || result.length === 0) {
+            throw new Error(`No data found for symbol: ${yahooSymbol}`);
+        }
+
+        // 3. Format for Chart (Ascending)
+        const chartData = result.map((quote: any) => ({
+            time: quote.date.toISOString().split("T")[0],
+            open: quote.open,
+            high: quote.high,
+            low: quote.low,
+            close: quote.close,
+        }));
+
+        // Take last 30
+        const limitChartData = chartData.slice(-30);
+
+        // 4. Strings for AI (Descending)
+        const aiData = [...limitChartData].reverse().slice(0, 14).map((d: any) => {
+            return `- ${d.time}: Open=${d.open}, High=${d.high}, Low=${d.low}, Close=${d.close}`;
         }).join("\n");
 
-        const analysis = await analyzeMarketDataWithGroq(symbol, formattedData);
+        // 5. Groq Analysis
+        const analysis = await analyzeMarketDataWithGroq(symbol, aiData);
 
-        return NextResponse.json({ result: analysis, chartData });
+        return NextResponse.json({ result: analysis, chartData: limitChartData });
 
     } catch (error: any) {
         console.error("Market Analysis Error:", error);
+        // Better error message
+        let msg = error.message || "Failed to analyze market data";
+        if (msg.includes("404")) msg = `Symbol '${symbol}' not found on Yahoo Finance.`;
+
         return NextResponse.json(
-            { error: error.message || "Failed to analyze market data" },
+            { error: msg },
             { status: 500 }
         );
     }

@@ -90,7 +90,7 @@ export default function MarketPage() {
                             <div className="space-y-2">
                                 <Label>Symbol</Label>
                                 <Input
-                                    placeholder={type === 'CRYPTO' ? 'BTC' : (type === 'FOREX' ? 'EUR/USD' : 'IBM')}
+                                    placeholder={type === 'CRYPTO' ? 'BTC, PEPE, WIF' : (type === 'FOREX' ? 'EURUSD, XAU' : 'BBCA.JK, AAPL')}
                                     value={symbol}
                                     onChange={(e) => setSymbol(e.target.value)}
                                 />
