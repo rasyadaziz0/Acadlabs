@@ -22,7 +22,7 @@ export async function analyzeWithGemini(imageBase64: string): Promise<string> {
   // IMPORTANT: use OCR-style instructions tailored for math content.
   // The goal is to TRANSCRIBE all visible text faithfully, not to describe the picture.
   const prompt = [
-    "TUGAS: Lakukan OCR terstruktur pada gambar/halaman berisi soal matematika.",
+    "TUGAS: Lakukan OCR terstruktur pada gambar/halaman pdf",
     "KELUARAN HARUS HANYA TEKS (tanpa penjelasan atau opini).",
     "INSTRUKSI:",
     "- Salin semua teks yang terlihat secara lengkap dan rapi: nomor soal, pernyataan soal, rumus, satuan, dan pilihan jawaban A–E.",

@@ -6,7 +6,7 @@ export default function AnalyzePage() {
       <div className="mx-auto max-w-2xl">
         <h1 className="text-2xl font-semibold mb-2">Image Analysis</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          Unggah gambar untuk dianalisis dengan Gemini 1.5 Flash. Opsional: refinement dengan GPT-oss.
+          Unggah gambar untuk dianalisis dengan Gemini 2.5 Flash. Opsional: refinement dengan GPT-oss.
         </p>
         <ImageUpload />
       </div>

@@ -46,3 +46,70 @@ export async function refineWithGPToss(input: string): Promise<string> {
   const content = data?.choices?.[0]?.message?.content;
   return (typeof content === "string" ? content : "").trim();
 }
+
+export async function analyzeMarketDataWithGroq(symbol: string, marketData: string): Promise<string> {
+  const keys = getGroqKeys();
+  if (keys.length === 0) {
+    throw new Error("Missing GROQ API key(s) in server environment");
+  }
+
+  const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+
+  const messages: { role: "system" | "user"; content: string }[] = [
+    {
+      role: "system",
+      content: [
+        "Anda adalah Trader Profesional.",
+        "Analisis data OHLCV berikut. Output WAJIB MURNI MARKDOWN.",
+        "DILARANG MENGGUNAKAN FORMAT TABEL (MARKDOWN TABLE) ATAU KARAKTER PIPE ('|').",
+        "Gunakan Format List/Bullet Points untuk data.",
+        "Gunakan 'Double Newline' (\\n\\n) antar poin agar tampilan tidak dempet.",
+        "Format Wajib:",
+        "# Judul Analisis",
+        "",
+        "## 🚦 Sentimen",
+        "(Spasi kosong)",
+        "- Poin Sentimen 1",
+        "",
+        "## 🎯 Key Levels",
+        "(Spasi kosong)",
+        "- Support: [Harga]",
+        "- Resistance: [Harga]",
+        "",
+        "## 🧠 Insight",
+        "(Spasi kosong)",
+        "- Analisis mendalam...",
+        "",
+        "## ⚡ Rekomendasi",
+        "(Spasi kosong)",
+        "- Action: [BUY/SELL]",
+        "- Target: [Harga]",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: `Symbol: ${symbol}\nData 14 Hari Terakhir:\n${marketData}`,
+    },
+  ];
+
+  const res = await callGroqWithFallback({
+    model,
+    messages,
+    temperature: 0.5,
+    stream: false,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    try {
+      const j = JSON.parse(text);
+      throw new Error(j?.error?.message || j?.message || `Groq API error (${res?.status ?? 500})`);
+    } catch {
+      throw new Error(text || `Groq API error (${res?.status ?? 500})`);
+    }
+  }
+
+  const data = await res.json();
+  const content = data?.choices?.[0]?.message?.content;
+  return (typeof content === "string" ? content : "").trim();
+}

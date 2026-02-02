@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Button } from "./ui/button";
-import { Plus, MoreVertical, Pencil, Trash2, Code, Calculator } from "lucide-react";
+import { Plus, MoreVertical, Pencil, Trash2, Code, Calculator, TrendingUp } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { motion } from "framer-motion";
@@ -177,9 +177,9 @@ export default function AppSidebarContent() {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                 >
                   <MoreVertical className="h-4 w-4" />
@@ -190,7 +190,7 @@ export default function AppSidebarContent() {
                   <Pencil className="mr-2 h-4 w-4" />
                   Rename
                 </DropdownMenuItem>
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={() => handleChatAction({ type: "delete", chatId: chat.id })}
                   className="text-destructive focus:text-destructive"
                 >
@@ -244,9 +244,9 @@ export default function AppSidebarContent() {
       {/* Content */}
       <div className="flex h-full flex-col">
         <div className="flex flex-col space-y-4 p-4 pt-2">
-          <Button 
-            variant="outline" 
-            className="flex justify-start gap-2 h-9 w-full border border-muted-foreground/20 text-sm" 
+          <Button
+            variant="outline"
+            className="flex justify-start gap-2 h-9 w-full border border-muted-foreground/20 text-sm"
             onClick={createNewChat}
           >
             <Plus className="h-4 w-4" />
@@ -271,6 +271,14 @@ export default function AppSidebarContent() {
             >
               <Code className="h-4 w-4" />
               Reason Code
+            </Button>
+            <Button
+              variant={pathname === "/market" ? "secondary" : "ghost"}
+              className="w-full justify-start gap-2 text-left rounded-lg py-2 text-sm"
+              onClick={() => router.push("/market")}
+            >
+              <TrendingUp className="h-4 w-4" />
+              Market Analysis
             </Button>
           </div>
 

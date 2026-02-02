@@ -37,6 +37,7 @@
     "html-react-parser": "^5.2.6",
     "jszip": "^3.10.1",
     "katex": "^0.16.22",
+    "lightweight-charts": "^5.1.0",
     "lucide-react": "^0.539.0",
     "mammoth": "^1.6.0",
     "monaco-editor": "^0.52.2",
@@ -61,7 +62,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
-    "@tailwindcss/typography": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
