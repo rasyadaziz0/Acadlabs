@@ -11,189 +11,156 @@ import { TrendingUp, BarChart3, AlertCircle, LineChart, Search } from "lucide-re
 import MarkdownRenderer from "@/components/chat/markdown/MarkdownRenderer";
 import dynamic from "next/dynamic";
 
-// Dynamic import for chart to avoid SSR issues
+// Dynamic imports
 const TradingChart = dynamic(() => import("@/components/market/TradingChart"), { ssr: false });
+const TradingViewWidget = dynamic(() => import("@/components/market/TradingViewWidget"), { ssr: false });
 
 export default function MarketPage() {
     const [symbol, setSymbol] = useState("");
     const [type, setType] = useState("STOCK");
-    const [interval, setInterval] = useState("1d"); // New State for Timeframe
+
+    // State to lock symbol for display (Chart & AI Result)
+    const [displaySymbol, setDisplaySymbol] = useState<string>("BTCUSDT");
     const [result, setResult] = useState<string | null>(null);
-    const [chartData, setChartData] = useState<any[]>([]);
+    const [chartData, setChartData] = useState<any[]>([]); // Data for Mobile Chart
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+
+    // Quick Mapping logic on Frontend (to align with Backend mostly)
+    const processSymbol = () => {
+        let s = symbol.trim().toUpperCase();
+        if (!s) return null;
+        if (type === "CRYPTO" && !s.includes("-")) s += "-USD";
+        if (type === "FOREX" && !["XAU", "GOLD"].includes(s) && !s.endsWith("=X")) s += "=X";
+        return s;
+    };
 
     const handleAnalyze = async () => {
-        if (!symbol) return;
+        const processedSymbol = processSymbol();
+        if (!processedSymbol) return;
 
         setLoading(true);
-        setError(null);
         setResult(null);
         setChartData([]);
+
+        // Locked Symbol for Chart
+        setDisplaySymbol(processedSymbol);
 
         try {
             const res = await fetch("/api/market", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ symbol, type, interval }), // Send Interval
+                body: JSON.stringify({ symbol: processedSymbol, type }),
             });
 
             const data = await res.json();
 
-            if (!res.ok) {
-                throw new Error(data.error || "Failed to analyze data");
+            // Note: API now returns success logic even for 404 (AI says "Data not found")
+            if (data.result) {
+                setResult(data.result);
+            } else {
+                setResult("## Gagal Memuat\nTidak ada respon dari server.");
             }
 
-            setResult(data.result);
-            setChartData(data.chartData || []);
+            if (data.data) {
+                setChartData(data.data);
+            }
         } catch (err: any) {
-            setError(err.message || "An unexpected error occurred");
+            setResult(`## Error\nTerjadi kesalahan jaringan: ${err.message}`);
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="flex flex-col h-full bg-background p-6 space-y-6">
-            <div className="flex items-center space-x-2">
-                <TrendingUp className="h-6 w-6 text-primary" />
-                <h1 className="text-2xl font-bold tracking-tight">Market Intelligence</h1>
+        <div className="flex flex-col h-[calc(100vh-4rem)] bg-background p-4 overflow-hidden">
+            {/* Header / Toolbar */}
+            <div className="flex flex-wrap items-center gap-4 mb-4 p-4 border rounded-lg bg-card shadow-sm shrink-0">
+                <div className="flex items-center gap-2 mr-auto">
+                    <TrendingUp className="h-6 w-6 text-primary" />
+                    <h1 className="text-xl font-bold hidden md:block">Market Analysis</h1>
+                </div>
+
+                {/* Input Group */}
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <Select value={type} onValueChange={setType}>
+                        <SelectTrigger className="w-[110px]">
+                            <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="STOCK">Stock</SelectItem>
+                            <SelectItem value="CRYPTO">Crypto</SelectItem>
+                            <SelectItem value="FOREX">Forex/Gold</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Input
+                        className="w-full md:w-[150px]"
+                        placeholder="Symbol"
+                        value={symbol}
+                        onChange={(e) => setSymbol(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
+                    />
+
+                    <Button onClick={handleAnalyze} disabled={loading || !symbol}>
+                        {loading ? <span className="animate-spin">⏳</span> : <Search className="h-4 w-4" />}
+                    </Button>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
-                {/* Left Panel: Inputs */}
-                <div className="lg:col-span-3 space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <Search className="h-4 w-4" />
-                                Analysis Parameters
-                            </CardTitle>
-                            <CardDescription>
-                                Select asset type and symbol.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label>Asset Type</Label>
-                                <Select value={type} onValueChange={setType}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="STOCK">Stock (e.g., IBM)</SelectItem>
-                                        <SelectItem value="CRYPTO">Crypto (e.g., BTC)</SelectItem>
-                                        <SelectItem value="FOREX">Forex (e.g., EUR/USD)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+            {/* Main Hybrid Layout: 2 Cols */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
+
+                {/* Chart Section (Responsive) */}
+                <div className="lg:col-span-2 border rounded-lg overflow-hidden bg-card shadow-md relative min-h-[400px]">
+
+                    {/* MOBILE: Static Chart (Lightweight Charts) */}
+                    <div className="block md:hidden h-full w-full">
+                        {chartData.length > 0 ? (
+                            <div className="h-full w-full p-2">
+                                <TradingChart data={chartData} />
                             </div>
-
-                            {/* Timeframe Selector */}
-                            <div className="space-y-2">
-                                <Label>Timeframe</Label>
-                                <Select value={interval} onValueChange={setInterval}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select timeframe" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="1d">Daily (1D)</SelectItem>
-                                        <SelectItem value="1w">Weekly (1W)</SelectItem>
-                                        <SelectItem value="1m">Monthly (1M)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-sm p-6">
+                                <BarChart3 className="h-10 w-10 mb-2 opacity-50" />
+                                <p>Chart Static (Mobile)</p>
+                                <p className="text-xs">Cari simbol untuk melihat data.</p>
                             </div>
+                        )}
+                    </div>
 
-                            <div className="space-y-2">
-                                <Label>Symbol</Label>
-                                <Input
-                                    placeholder={type === 'CRYPTO' ? 'BTC, PEPE, WIF' : (type === 'FOREX' ? 'EURUSD, XAU' : 'BBCA.JK, AAPL')}
-                                    value={symbol}
-                                    onChange={(e) => setSymbol(e.target.value)}
-                                />
-                            </div>
-
-                            <Button
-                                className="w-full"
-                                onClick={handleAnalyze}
-                                disabled={loading || !symbol}
-                            >
-                                {loading ? (
-                                    <>
-                                        <span className="animate-spin mr-2">⏳</span> Analyzing...
-                                    </>
-                                ) : (
-                                    <>
-                                        <BarChart3 className="mr-2 h-4 w-4" /> Analyze Market
-                                    </>
-                                )}
-                            </Button>
-
-                            {error && (
-                                <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-md flex items-center gap-2">
-                                    <AlertCircle className="h-4 w-4" />
-                                    {error}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <div className="p-4 rounded-lg bg-muted/50 border text-sm text-muted-foreground">
-                        <h4 className="font-semibold mb-2 flex items-center gap-2">
-                            <LineChart className="h-4 w-4" />
-                            Intelligence Source
-                        </h4>
-                        <p className="mb-2">
-                            <strong>Data:</strong> Alpha Vantage (100 Days)
-                        </p>
-                        <p>
-                            <strong>Analysis:</strong> Groq AI (Technical)
-                        </p>
+                    {/* DESKTOP: Widget TradingView Pro */}
+                    <div className="hidden md:block absolute inset-0">
+                        <TradingViewWidget symbol={displaySymbol} />
                     </div>
                 </div>
 
-                {/* Right Panel: Chart & Results */}
-                <div className="lg:col-span-9 flex flex-col space-y-4">
-                    {/* Chart Section */}
-                    {chartData.length > 0 ? (
-                        <div className="w-full">
-                            <TradingChart data={chartData} />
-                        </div>
-                    ) : (
-                        !loading && (
-                            <div className="w-full h-[400px] border rounded-lg bg-muted/10 flex items-center justify-center text-muted-foreground">
-                                <div className="text-center">
-                                    <LineChart className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                                    <p>Enter a symbol to view chart</p>
-                                </div>
-                            </div>
-                        )
-                    )}
+                {/* Right: AI Analysis (1/3) */}
+                <div className="border rounded-lg bg-card shadow-md flex flex-col min-h-0">
+                    <div className="p-3 border-b bg-muted/20">
+                        <h2 className="font-semibold flex items-center gap-2">
+                            <BarChart3 className="h-4 w-4 text-purple-500" />
+                            AcadLabs AI Insight
+                        </h2>
+                    </div>
 
-                    {/* Analysis Result */}
-                    <Card className="flex-1">
-                        <CardHeader className="pb-2">
-                            <CardTitle>AI Technical Analysis</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {loading ? (
-                                <div className="space-y-3">
-                                    <Skeleton className="h-4 w-3/4" />
-                                    <Skeleton className="h-4 w-1/2" />
-                                    <Skeleton className="h-16 w-full" />
-                                </div>
-                            ) : result ? (
-                                <CardContent className="p-6">
-                                    <div className="w-full max-w-none min-h-[200px]">
-                                        <MarkdownRenderer content={result} role="assistant" />
-                                    </div>
-                                </CardContent>
-                            ) : (
-                                <div className="text-sm text-muted-foreground">
-                                    Running analysis will display AI insights here.
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                        {loading ? (
+                            <div className="space-y-4 animate-pulse">
+                                <Skeleton className="h-4 w-3/4" />
+                                <Skeleton className="h-4 w-full" />
+                                <Skeleton className="h-4 w-5/6" />
+                                <div className="h-32 bg-muted/20 rounded-lg" />
+                            </div>
+                        ) : result ? (
+                            <MarkdownRenderer content={result} role="assistant" />
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-center p-6 opacity-60">
+                                <AlertCircle className="h-12 w-12 mb-3" />
+                                <p>Ready to Analyze.</p>
+                                <p className="text-xs mt-1">Select asset and click search to generate AI insights.</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
