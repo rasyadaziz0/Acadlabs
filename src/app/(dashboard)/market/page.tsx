@@ -17,6 +17,7 @@ const TradingChart = dynamic(() => import("@/components/market/TradingChart"), {
 export default function MarketPage() {
     const [symbol, setSymbol] = useState("");
     const [type, setType] = useState("STOCK");
+    const [interval, setInterval] = useState("1d"); // New State for Timeframe
     const [result, setResult] = useState<string | null>(null);
     const [chartData, setChartData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
@@ -34,7 +35,7 @@ export default function MarketPage() {
             const res = await fetch("/api/market", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ symbol, type }),
+                body: JSON.stringify({ symbol, type, interval }), // Send Interval
             });
 
             const data = await res.json();
@@ -83,6 +84,21 @@ export default function MarketPage() {
                                         <SelectItem value="STOCK">Stock (e.g., IBM)</SelectItem>
                                         <SelectItem value="CRYPTO">Crypto (e.g., BTC)</SelectItem>
                                         <SelectItem value="FOREX">Forex (e.g., EUR/USD)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Timeframe Selector */}
+                            <div className="space-y-2">
+                                <Label>Timeframe</Label>
+                                <Select value={interval} onValueChange={setInterval}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select timeframe" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="1d">Daily (1D)</SelectItem>
+                                        <SelectItem value="1w">Weekly (1W)</SelectItem>
+                                        <SelectItem value="1m">Monthly (1M)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

@@ -28,7 +28,7 @@ export default function TradingChart({ data }: TradingChartProps) {
         const isDark = theme === "dark" || theme === "system"; // Simplified check
 
         // Chart Layout Options
-        const chartOptions = {
+        const chartOptions: LightweightCharts.DeepPartial<LightweightCharts.ChartOptions> = {
             layout: {
                 background: { type: LightweightCharts.ColorType.Solid, color: isDark ? "#121212" : "#ffffff" },
                 textColor: isDark ? "#d1d5db" : "#374151",
@@ -39,7 +39,26 @@ export default function TradingChart({ data }: TradingChartProps) {
             },
             width: chartContainerRef.current.clientWidth,
             height: 400,
-            autoSize: true, // IMPORTANT: Enables auto resize
+            autoSize: true,
+            timeScale: {
+                timeVisible: true,
+                secondsVisible: false,
+            },
+            crosshair: {
+                mode: LightweightCharts.CrosshairMode.Normal, // Interactive Crosshair
+            },
+            rightPriceScale: {
+                autoScale: true, // Auto Scale on Y Axis
+            },
+            handleScroll: {
+                mouseWheel: true,
+                pressedMouseMove: true,
+            },
+            handleScale: {
+                axisPressedMouseMove: true,
+                mouseWheel: true,
+                pinch: true,
+            },
         };
 
         const chart = LightweightCharts.createChart(chartContainerRef.current, chartOptions);
@@ -47,8 +66,8 @@ export default function TradingChart({ data }: TradingChartProps) {
 
         // Create Candlestick Series
         const series = chart.addSeries(LightweightCharts.CandlestickSeries, {
-            upColor: "#26a69a",
-            downColor: "#ef5350",
+            upColor: "#26a69a", // Green
+            downColor: "#ef5350", // Red
             borderVisible: false,
             wickUpColor: "#26a69a",
             wickDownColor: "#ef5350",
@@ -58,7 +77,7 @@ export default function TradingChart({ data }: TradingChartProps) {
         // Set Data
         series.setData(data);
 
-        // Fit Content
+        // Fit Content initially
         chart.timeScale().fitContent();
 
         // Resize Observer to handle window resize
