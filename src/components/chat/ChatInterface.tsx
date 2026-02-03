@@ -7,6 +7,7 @@ import ChatMessage from "@/components/chat/ChatMessage";
 import { EmptyState } from "@/components/chat/EmptyState";
 import SearchResults from "@/components/search-results";
 import AiInput from "@/components/ui/ai-input";
+import React from "react";
 
 interface ChatInterfaceProps {
     initialChatId?: string;
@@ -66,18 +67,40 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
                     {messages.length === 0 && !isLoadingMessages ? (
                         <EmptyState setInput={setInput} />
                     ) : (
-                        messages.map((msg, i) => (
-                            <ChatMessage
-                                key={msg.id || i}
-                                message={msg}
-                                chatTitle="" // derivedChatTitle logic removed or needs re-adding if essential
-                                onMessageUpdated={handleMessageUpdated}
-                                onResend={handleResendFromMessage}
-                            />
-                        ))
+                        messages.map((msg, i) => {
+                            const isLast = i === messages.length - 1;
+                            // Inject Search Results ABOVE the active assistant message
+                            if (msg.role === "assistant" && isLast && (isLoading || isStreaming || isSearching)) {
+                                return (
+                                    <div key={msg.id || i} className="flex flex-col gap-4">
+                                        {(isSearching || searchResults.length > 0) && (
+                                            <div className="w-full max-w-3xl mx-auto fade-in-up">
+                                                <SearchResults results={searchResults} isSearching={isSearching} />
+                                            </div>
+                                        )}
+                                        <ChatMessage
+                                            message={msg}
+                                            chatTitle=""
+                                            onMessageUpdated={handleMessageUpdated}
+                                            onResend={handleResendFromMessage}
+                                        />
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <ChatMessage
+                                    key={msg.id || i}
+                                    message={msg}
+                                    chatTitle=""
+                                    onMessageUpdated={handleMessageUpdated}
+                                    onResend={handleResendFromMessage}
+                                />
+                            );
+                        })
                     )}
 
-                    {isStreaming && (
+                    {isStreaming && messages.length === 0 && ( /* Edge case */
                         <span className="ml-0.5 inline-block align-[-0.15em] w-[8px] h-[1em] bg-current/70 rounded-sm animate-pulse" />
                     )}
 
@@ -90,12 +113,6 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
                 className="fixed bottom-0 z-20 w-full bg-gradient-to-t from-background via-background/90 to-transparent pt-6 pb-2 px-4 md:left-64 md:w-[calc(100%-16rem)]"
             >
                 <div className="max-w-3xl mx-auto space-y-4">
-                    {/* ONLY show if actively searching OR if there are results while AI is thinking/streaming */}
-                    {(isSearching || ((isLoading || isStreaming) && searchResults.length > 0)) && (
-                        <div className="w-full max-w-3xl mx-auto mb-4">
-                            <SearchResults results={searchResults} isSearching={isSearching} />
-                        </div>
-                    )}
                     <AiInput
                         value={input}
                         onChange={setInput}
