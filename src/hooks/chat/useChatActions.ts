@@ -266,6 +266,7 @@ export function useChatActions(
             setIsStreaming(false);
             setStreamingAssistantId(null);
             setAttachedFile(null);
+            setSearchResults([]);
         }
     };
 
