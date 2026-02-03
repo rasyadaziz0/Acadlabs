@@ -9,13 +9,23 @@ import rehypeKatex from "rehype-katex";
 import LinkDialog from "../LinkDialog";
 import { CodeBlock } from "./CodeBlock";
 import { Table, Thead, Tbody, Tr, Th, Td } from "./TableElements";
-import { remarkBrToBreak, normalizeMathDelimiters, normalizeHeadingSpacing, collapseTinyFences, tightenBodySpacing, mergeInlineTokenLines, fixAndDecodeEntitiesMinimal, normalizeBoldSpacing } from "./plugins";
+import { remarkBrToBreak } from "./plugins";
+import { decodeHtmlEntities } from "@/components/math-solver/math-utils";
 
 export interface MarkdownRendererProps {
   content: string;
   role: "user" | "assistant";
   isStreaming?: boolean;
   onNormalizedChange?: (text: string) => void;
+}
+
+// Copied from SolverOutput.tsx to match MathSolver layout
+function normalizeDelimiters(input: string): string {
+  let s = input || "";
+  // Convert \[...\] and \(...\) to $$...$$ and $...$
+  s = s.replace(/\\\[((?:.|\n)*?)\\\]/g, (_: string, m: string) => `$$${m}$$`);
+  s = s.replace(/\\\(((?:.|\n)*?)\\\)/g, (_: string, m: string) => `$${m}$`);
+  return s;
 }
 
 function renderWithBrs(children: any) {
@@ -41,21 +51,9 @@ export default function MarkdownRenderer({ content, role, isStreaming = false, o
   const [linkToOpen, setLinkToOpen] = useState<string | null>(null);
   const deferred = useDeferredValue(content);
 
+  // Use MathSolver's cleanup pipeline for "neat" layout
   const normalizedBody = useMemo(
-    () =>
-      tightenBodySpacing(
-        mergeInlineTokenLines(
-          collapseTinyFences(
-            normalizeHeadingSpacing(
-              normalizeMathDelimiters(
-                fixAndDecodeEntitiesMinimal(
-                  normalizeBoldSpacing(isStreaming ? deferred : content) // Add Bold Normalization Here
-                )
-              )
-            )
-          )
-        )
-      ),
+    () => normalizeDelimiters(decodeHtmlEntities(isStreaming ? deferred : content)),
     [isStreaming, deferred, content]
   );
 
@@ -65,29 +63,40 @@ export default function MarkdownRenderer({ content, role, isStreaming = false, o
 
   const markdownComponents = useMemo<Components>(
     () => ({
-      inlineMath(props: any) {
-        const v = (props as any).value ?? "";
-        if (isStreaming) return <span>{`$${String(v)}$`}</span>;
-        return <span>{`$${String(v)}$`}</span>;
-      },
-      math(props: any) {
-        const v = (props as any).value ?? "";
-        if (isStreaming)
-          return (
-            <pre className="my-3 whitespace-pre-wrap break-words text-sm bg-transparent px-0 py-0 overflow-x-auto">{`$$\n${String(v)}\n$$`}</pre>
-          );
-        return <pre className="sr-only" aria-hidden>{String(v)}</pre>;
-      },
       code(props: any) {
         return <CodeBlock {...props} isStreaming={isStreaming} />;
       },
+      h1(props: any) {
+        const { children } = props as any;
+        return <h1 className="text-2xl font-semibold mt-6 mb-4 tracking-tight">{children}</h1>;
+      },
+      h2(props: any) {
+        const { children } = props as any;
+        return <h2 className="text-xl font-semibold mt-5 mb-3 tracking-tight">{children}</h2>;
+      },
+      h3(props: any) {
+        const { children } = props as any;
+        return <h3 className="text-lg font-semibold mt-4 mb-2 tracking-tight">{children}</h3>;
+      },
+      h4(props: any) {
+        const { children } = props as any;
+        return <h4 className="text-base font-semibold mt-3 mb-2">{children}</h4>;
+      },
+      h5(props: any) {
+        const { children } = props as any;
+        return <h5 className="text-sm font-semibold mt-3 mb-2">{children}</h5>;
+      },
+      h6(props: any) {
+        const { children } = props as any;
+        return <h6 className="text-sm font-semibold mt-3 mb-2">{children}</h6>;
+      },
       ul(props: any) {
         const { children } = props as any;
-        return <ul className="list-outside list-disc pl-6 my-2 space-y-2">{children}</ul>;
+        return <ul className="list-outside list-disc pl-6 my-[6px] space-y-1">{children}</ul>;
       },
       ol(props: any) {
         const { children } = props as any;
-        return <ol className="list-outside list-decimal pl-6 my-2 space-y-2">{children}</ol>;
+        return <ol className="list-outside list-decimal pl-6 my-[6px] space-y-1">{children}</ol>;
       },
       a(props: any) {
         const { children, href } = props as any;
@@ -109,15 +118,19 @@ export default function MarkdownRenderer({ content, role, isStreaming = false, o
         return <blockquote className="border-l-4 border-zinc-300 dark:border-zinc-700 pl-4 italic my-3">{children}</blockquote>;
       },
       hr() {
-        return <hr className="my-6 border-zinc-200 dark:border-zinc-800" />;
+        return <hr className="my-6 border-t border-zinc-300/50 dark:border-zinc-700/50" />;
       },
       p(props: any) {
         const { children } = props as any;
-        return <div className="break-words whitespace-normal w-full max-w-full my-2">{renderWithBrs(children)}</div>;
+        return <div className="break-words whitespace-normal w-full max-w-full my-[6px] leading-relaxed">{renderWithBrs(children)}</div>;
       },
       li(props: any) {
         const { children } = props as any;
-        return <li className="break-words whitespace-normal w-full max-w-full">{renderWithBrs(children)}</li>;
+        return <li className="break-words whitespace-normal w-full max-w-full leading-relaxed my-1">{renderWithBrs(children)}</li>;
+      },
+      strong(props: any) {
+        const { children } = props as any;
+        return <strong className="font-semibold text-foreground">{children}</strong>;
       },
       table: Table as any,
       thead: Thead as any,

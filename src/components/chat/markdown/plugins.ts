@@ -174,9 +174,6 @@ export const tightenBodySpacing = (input: string): string => {
   }
 };
 
-// Merge lines that only contain inline code tokens or small connectors (",", ".", "dan", "atau")
-// Example:
-// `for`\n,\n`while`\ndan\n`do-while` => `for`, `while` dan `do-while`
 export const mergeInlineTokenLines = (input: string): string => {
   if (!input) return input;
   const codeBlockRegex = /```[\s\S]*?```/g;
@@ -291,11 +288,9 @@ export function fixAndDecodeEntitiesMinimal(input: string): string {
 }
 
 /**
- * Memperbaiki format bold yang rusak akibat spasi berlebih.
- * Mengubah "** Teks **" menjadi "**Teks**" agar valid dirender sebagai Bold.
+ * Hapus spasi di dalam tag bold: "** Teks **" -> "**Teks**"
  */
 export const normalizeBoldSpacing = (text: string) => {
   if (!text) return text;
-  // Regex: Cari "**", spasi, teks apa saja (kecuali bintang), spasi, lalu "**"
   return text.replace(/\*\*\s+([^*]+?)\s+\*\*/g, "**$1**");
 };

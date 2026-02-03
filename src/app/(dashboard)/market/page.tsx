@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,8 +87,40 @@ export default function MarketPage() {
         }
     };
 
+    // Locking via CSS is preferred. Removed aggressive JS lock to fix "stuck" scroll.
+    // UPDATE: User confirmed "Page scrolls" is unwanted. We strictly lock the DASHBOARD MAIN CONTAINER (#app-scroll).
+    useEffect(() => {
+        // Elements to lock: html, body, and the dashboard constraint
+        // We use a "Nuclear" approach because likely global CSS or Sidebar layout is forcing a scrollbar.
+        const targets = [
+            document.documentElement,
+            document.body,
+            document.getElementById("app-scroll")
+        ];
+
+        const originalStyles = targets.map(el => el ? el.style.overflow : null);
+
+        // Apply Lock
+        targets.forEach(el => {
+            if (el) el.style.setProperty("overflow", "hidden", "important");
+        });
+
+        return () => {
+            // Restore
+            targets.forEach((el, i) => {
+                if (el) {
+                    if (originalStyles[i]) {
+                        el.style.overflow = originalStyles[i]!;
+                    } else {
+                        el.style.removeProperty("overflow");
+                    }
+                }
+            });
+        };
+    }, []);
+
     return (
-        <div className="flex flex-col h-[calc(100vh-4rem)] bg-background p-4 overflow-hidden">
+        <div className="flex flex-col h-full bg-background p-4 overflow-hidden">
             {/* Header / Toolbar */}
             <div className="flex flex-wrap items-center gap-4 mb-4 p-4 border rounded-lg bg-card shadow-sm shrink-0">
                 <div className="flex items-center gap-2 mr-auto">
@@ -124,58 +156,63 @@ export default function MarketPage() {
             </div>
 
             {/* Main Hybrid Layout: 2 Cols */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
+            {/* ABSOLUTE WRAPPER STRATEGY: Forces Grid to fit exactly 100% of remaining space */}
+            <div className="flex-1 min-h-0 relative w-full">
+                <div className="absolute inset-0 grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-1 gap-4">
 
-                {/* Chart Section (Responsive) */}
-                <div className="lg:col-span-2 border rounded-lg overflow-hidden bg-card shadow-md relative min-h-[400px]">
+                    {/* Chart Section (Responsive) */}
+                    <div className="lg:col-span-2 border rounded-lg overflow-hidden bg-card shadow-md relative min-h-[400px] lg:min-h-0 h-full">
 
-                    {/* MOBILE: Static Chart (Lightweight Charts) */}
-                    <div className="block md:hidden h-full w-full">
-                        {chartData.length > 0 ? (
-                            <div className="h-full w-full p-2">
-                                <TradingChart data={chartData} />
-                            </div>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-sm p-6">
-                                <BarChart3 className="h-10 w-10 mb-2 opacity-50" />
-                                <p>Chart Static (Mobile)</p>
-                                <p className="text-xs">Cari simbol untuk melihat data.</p>
-                            </div>
-                        )}
+                        {/* MOBILE: Static Chart (Lightweight Charts) */}
+                        <div className="block md:hidden h-full w-full">
+                            {chartData.length > 0 ? (
+                                <div className="h-full w-full p-2">
+                                    <TradingChart data={chartData} />
+                                </div>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-sm p-6">
+                                    <BarChart3 className="h-10 w-10 mb-2 opacity-50" />
+                                    <p>Chart Static (Mobile)</p>
+                                    <p className="text-xs">Cari simbol untuk melihat data.</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* DESKTOP: Widget TradingView Pro */}
+                        <div className="hidden md:block absolute inset-0">
+                            <TradingViewWidget symbol={displaySymbol} />
+                        </div>
                     </div>
 
-                    {/* DESKTOP: Widget TradingView Pro */}
-                    <div className="hidden md:block absolute inset-0">
-                        <TradingViewWidget symbol={displaySymbol} />
-                    </div>
-                </div>
+                    {/* Right: AI Analysis (1/3) */}
+                    <div className="border rounded-lg bg-card shadow-md flex flex-col min-h-0 h-full">
+                        <div className="p-3 border-b bg-muted/20 shrink-0">
+                            <h2 className="font-semibold flex items-center gap-2">
+                                <BarChart3 className="h-4 w-4 text-purple-500" />
+                                AcadLabs AI Insight
+                            </h2>
+                        </div>
 
-                {/* Right: AI Analysis (1/3) */}
-                <div className="border rounded-lg bg-card shadow-md flex flex-col min-h-0">
-                    <div className="p-3 border-b bg-muted/20">
-                        <h2 className="font-semibold flex items-center gap-2">
-                            <BarChart3 className="h-4 w-4 text-purple-500" />
-                            AcadLabs AI Insight
-                        </h2>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                        {loading ? (
-                            <div className="space-y-4 animate-pulse">
-                                <Skeleton className="h-4 w-3/4" />
-                                <Skeleton className="h-4 w-full" />
-                                <Skeleton className="h-4 w-5/6" />
-                                <div className="h-32 bg-muted/20 rounded-lg" />
-                            </div>
-                        ) : result ? (
-                            <MarkdownRenderer content={result} role="assistant" />
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-center p-6 opacity-60">
-                                <AlertCircle className="h-12 w-12 mb-3" />
-                                <p>Ready to Analyze.</p>
-                                <p className="text-xs mt-1">Select asset and click search to generate AI insights.</p>
-                            </div>
-                        )}
+                        <div className="flex-1 overflow-y-auto p-4 pb-8 scroll-smooth">
+                            {loading ? (
+                                <div className="space-y-4 animate-pulse">
+                                    <Skeleton className="h-4 w-3/4" />
+                                    <Skeleton className="h-4 w-full" />
+                                    <Skeleton className="h-4 w-5/6" />
+                                    <div className="h-32 bg-muted/20 rounded-lg" />
+                                </div>
+                            ) : result ? (
+                                <div className="prose dark:prose-invert w-full max-w-none break-words text-sm leading-relaxed prose-headings:tracking-tight prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-2 prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-p:leading-6 prose-li:leading-6 prose-p:my-[4px] prose-strong:font-semibold prose-a:no-underline hover:prose-a:underline prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-ul:my-[4px] prose-ol:my-[4px] prose-li:my-0.5 prose-li:marker:text-zinc-500 dark:prose-li:marker:text-zinc-400 prose-pre:rounded-lg prose-pre:bg-zinc-100 dark:prose-pre:bg-zinc-900 prose-hr:border-zinc-200 dark:prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-zinc-300 dark:prose-blockquote:border-zinc-700 prose-blockquote:pl-4 prose-blockquote:italic">
+                                    <MarkdownRenderer content={result} role="assistant" />
+                                </div>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-center p-6 opacity-60">
+                                    <AlertCircle className="h-12 w-12 mb-3" />
+                                    <p>Ready to Analyze.</p>
+                                    <p className="text-xs mt-1">Select asset and click search to generate AI insights.</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

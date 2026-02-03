@@ -45,8 +45,11 @@
 
 /* Code and pre styling (global) */
 @layer base {
+
   /* Inline code elements */
-  code, kbd, samp {
+  code,
+  kbd,
+  samp {
     @apply font-mono text-[13.5px] bg-zinc-100 text-foreground dark:bg-zinc-800/60 px-1.5 py-0.5 rounded-[10px];
   }
 
@@ -69,7 +72,8 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: #FFD700; /* Warna kuning cerah untuk Acadlabs */
+  --primary: #FFD700;
+  /* Warna kuning cerah untuk Acadlabs */
   --primary-foreground: oklch(0.145 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -103,7 +107,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: #FFD700; /* Warna kuning cerah untuk Acadlabs */
+  --primary: #FFD700;
+  /* Warna kuning cerah untuk Acadlabs */
   --primary-foreground: oklch(0.145 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -134,19 +139,26 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     /* Inter as global body font with default size and line-height */
     @apply bg-background text-foreground font-sans text-[15px] leading-[1.65];
   }
 
   /* Ensure headings inherit Inter */
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-sans;
   }
 }
 
 /* Thin, elegant scrollbars globally (ChatGPT-like) */
 @layer base {
+
   /* Firefox */
   * {
     scrollbar-width: thin;
@@ -158,15 +170,19 @@
     width: 6px;
     height: 6px;
   }
+
   *::-webkit-scrollbar-track {
     background: transparent;
   }
+
   *::-webkit-scrollbar-thumb {
     background-color: color-mix(in oklch, var(--foreground) 28%, transparent);
     border-radius: 9999px;
-    border: 2px solid transparent; /* creates an inner thin bar */
+    border: 2px solid transparent;
+    /* creates an inner thin bar */
     background-clip: content-box;
   }
+
   .dark *::-webkit-scrollbar-thumb {
     background-color: color-mix(in oklch, var(--foreground) 40%, transparent);
   }
@@ -174,9 +190,15 @@
 
 @layer utilities {
   @keyframes shimmer {
-    0% { background-position: 0% 0; }
-    100% { background-position: -200% 0; }
+    0% {
+      background-position: 0% 0;
+    }
+
+    100% {
+      background-position: -200% 0;
+    }
   }
+
   .animate-shimmer {
     animation: shimmer 2s linear infinite;
   }
@@ -184,6 +206,7 @@
 
 /* Prevent KaTeX display math from widening the page on mobile */
 @layer base {
+
   /* Contain wide equations and allow horizontal scroll if needed */
   .katex-display {
     max-width: 100%;
@@ -191,9 +214,92 @@
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
   }
+
   /* Keep formula in a single line horizontally within the scroll area */
-  .katex-display > .katex {
+  .katex-display>.katex {
     display: inline-block;
     white-space: nowrap;
+  }
+}
+
+/* AI Analysis Panel Markdown Styling */
+@layer components {
+
+  /* Headings in markdown */
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    @apply font-sans font-semibold tracking-tight;
+  }
+
+  .prose h1 {
+    @apply text-2xl mt-6 mb-4;
+  }
+
+  .prose h2 {
+    @apply text-xl mt-5 mb-3;
+  }
+
+  .prose h3 {
+    @apply text-lg mt-4 mb-2;
+  }
+
+  .prose h4 {
+    @apply text-base mt-3 mb-2;
+  }
+
+  /* Strong/Bold text */
+  .prose strong {
+    @apply font-semibold text-foreground;
+  }
+
+  /* Lists */
+  .prose ul {
+    @apply list-disc list-outside pl-5 my-3 space-y-1.5;
+  }
+
+  .prose ol {
+    @apply list-decimal list-outside pl-5 my-3 space-y-1.5;
+  }
+
+  .prose li {
+    @apply leading-relaxed;
+  }
+
+  /* Paragraphs */
+  .prose p {
+    @apply my-3 leading-relaxed;
+  }
+
+  /* Links */
+  .prose a {
+    @apply text-primary underline-offset-2 hover:underline;
+  }
+
+  /* Blockquotes */
+  .prose blockquote {
+    @apply border-l-4 border-muted-foreground/30 pl-4 italic my-4 text-muted-foreground;
+  }
+
+  /* Horizontal rules */
+  .prose hr {
+    @apply my-6 border-border;
+  }
+
+  /* Code blocks */
+  .prose pre {
+    @apply my-4;
+  }
+
+  .prose code {
+    @apply text-[13.5px];
+  }
+
+  /* Tables */
+  .prose table {
+    @apply w-full my-4;
   }
 }
