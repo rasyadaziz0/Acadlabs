@@ -18,7 +18,6 @@ export function getGroqKeys(): string[] {
     if (process.env.GROQ_API_KEY) keys.push(process.env.GROQ_API_KEY);
     if (process.env.GROQ_API_KEY_1) keys.push(process.env.GROQ_API_KEY_1);
     if (process.env.GROQ_API_KEY_2) keys.push(process.env.GROQ_API_KEY_2);
-    // De-duplicate and filter empties
     return Array.from(new Set(keys.filter(Boolean)));
 }
 
@@ -44,11 +43,7 @@ export async function callGroqWithFallback(
                 signal,
             });
         } catch (e) {
-            // Network error; try next key if available
-            if (i < keys.length - 1) {
-                continue;
-            }
-            // No more keys; synthesize a 502 response
+            if (i < keys.length - 1) continue;
             return new Response(JSON.stringify({ error: "Upstream network error" }), {
                 status: 502,
                 headers: { "Content-Type": "application/json" },
@@ -56,17 +51,14 @@ export async function callGroqWithFallback(
         }
 
         if (res.ok) return res;
-
         lastResponse = res;
-        // Only fallback on auth/quota/rate-limit type failures
         if (i < keys.length - 1 && [401, 402, 403, 429].includes(res.status)) {
-            continue; // try next key
+            continue;
         } else {
-            break; // return this failure
+            break;
         }
     }
 
-    // If no keys or all failed, return the last failure (or a synthetic 500)
     return (
         lastResponse ||
         new Response(JSON.stringify({ error: "No GROQ API key configured" }), {

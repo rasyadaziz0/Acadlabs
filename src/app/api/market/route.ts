@@ -28,14 +28,15 @@ export async function POST(req: Request) {
                 if (cgData) {
                     sourceUsed = "COINGECKO";
                     aiContextData = `
-                        Data Source: CoinGecko (Priority for Crypto)
-                            Symbol: ${cgData.symbol}
-                        Current Price: $${cgData.price}
-                        Market Cap: $${cgData.marketCap.toLocaleString()}
-                        24h Volume: ${cgData.volume24h.toLocaleString()}
-                        24h Change: ${cgData.change24h.toFixed(2)}%
+                        **DATA SUMBER: CoinGecko (Live Crypto Market)**
+                        ------------------------------------------------
+                        **Symbol**: ${cgData.symbol}
+                        **Harga Saat Ini**: $${cgData.price.toLocaleString("en-US")}
+                        **Kapitalisasi Pasar**: $${cgData.marketCap.toLocaleString("en-US")}
+                        **Volume 24 Jam**: $${cgData.volume24h.toLocaleString("en-US")}
+                        **Perubahan 24 Jam**: ${cgData.change24h >= 0 ? "+" : ""}${cgData.change24h.toFixed(2)}%
 
-                            Price History (Last 14 Days):
+                        **Riwayat Harga (14 Hari Terakhir)**:
                         ${cgData.history.price.map((p: number, i: number) => {
                         const ts = cgData?.history.timestamp[i] || Date.now();
                         const date = new Date(ts).toISOString().split('T')[0];
