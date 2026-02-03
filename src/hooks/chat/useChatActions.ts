@@ -323,17 +323,8 @@ export function useChatActions(
                 // Persist final assistant message
                 const finalText = sanitizeAIText(fullContent.trim());
                 if (finalText.length > 0) {
-                    const insertPayload: any = {
-                        role: "assistant",
-                        content: finalText,
-                        chat_id: currentChatId,
-                        user_id: userData.user.id,
-                    };
-                    if (streamMessageId) insertPayload.id = streamMessageId;
-                    const { error: assistantError } = await supabase
-                        .from("messages")
-                        .insert(insertPayload);
-                    if (assistantError) throw assistantError;
+                    // DB save moved to server-side
+
                     if (streamMessageId) {
                         setMessages((prev) => {
                             const idx = prev.findIndex((m) => m.id === streamMessageId);
@@ -512,11 +503,6 @@ export function useChatActions(
 
             // Persist final assistant message
             const finalText = sanitizeAIText(fullContent.trim());
-
-            if (finalText.length > 0) {
-                // ... DB insert logic
-            }
-            // Actually, simpler to just return the cleaned up hook return.
 
         } catch (e) {
             console.error('Resend error:', e);

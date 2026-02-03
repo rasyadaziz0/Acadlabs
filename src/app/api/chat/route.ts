@@ -7,9 +7,9 @@ import {
   ChatMessage,
   GroqChatRequest,
   getGroqKeys,
-  callGroqWithFallback,
 } from "@/lib/ai-service";
 import { trimMessagesForBudget } from "@/lib/token-utils";
+import Groq from "groq-sdk";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,12 +55,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (getGroqKeys().length === 0) {
+    const groqKeys = getGroqKeys();
+    if (groqKeys.length === 0) {
       return NextResponse.json(
         { error: "Mohon Maaf, Server sedang down" },
         { status: 500 }
       );
     }
+    const apiKey = groqKeys[0]; // Simple selection strategy
+    const groq = new Groq({ apiKey });
 
     // Filter and ensure valid messages
     const incoming: ChatMessage[] = (messages as unknown[]).filter(isChatMessage) as ChatMessage[];
@@ -148,9 +151,9 @@ Language: Adapt to the user's language (Indonesian/English). If Indonesian, use 
         "- Jawab dengan gaya senior software engineer: jelas, padat, praktis.",
         "",
         "**Aturan konteks:**",
-        "- Kalau user minta sesuatu tanpa nyebut target (misalnya \\\"buat unit test\\\"), pilih function/class terdekat yang relevan.",
+        "- Kalau user minta sesuatu tanpa nyebut target (misalnya \"buat unit test\"), pilih function/class terdekat yang relevan.",
         "- Jangan keluarin teks di luar aturan ini.",
-      ].join("\\n"),
+      ].join("\n"),
     };
     // Prepend the system instructions
     const finalMessages = [systemPersona, systemFormattingInstruction, ...formattedMessages];
@@ -176,141 +179,76 @@ Language: Adapt to the user's language (Indonesian/English). If Indonesian, use 
       });
     }
 
-    // Decide response mode by Accept header
-    const accept = request.headers.get("accept") || "";
-    const wantsSSE = /text\/event-stream/i.test(accept);
-
     // Trim messages to stay under approximate token budget to reduce TPM pressure
     const MAX_INPUT_TOKENS = Number(process.env.GROQ_MAX_INPUT_TOKENS) || 6000;
     const trimmedMessages = trimMessagesForBudget(finalMessages, MAX_INPUT_TOKENS);
 
-    // Call Groq API
-    const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b"; // default Groq model
+    // Call Groq API with Streaming
+    const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
     const MAX_OUTPUT_TOKENS = Number(process.env.GROQ_MAX_TOKENS) || 4048;
-    const response = await callGroqWithFallback({
-      model,
-      messages: trimmedMessages,
+
+    const completion = await groq.chat.completions.create({
+      model: model,
+      messages: trimmedMessages as any, // sdk types slight mismatch fallback
       temperature: 0.7,
-      stream: wantsSSE,
+      stream: true, // Force streaming
       max_tokens: MAX_OUTPUT_TOKENS,
-    }, request.signal);
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("API non-OK:", errorText);
-      try {
-        const json = JSON.parse(errorText);
-        return NextResponse.json(
-          { error: json.error?.message || json.message || "API error" },
-          { status: response.status }
-        );
-      } catch {
-        return NextResponse.json(
-          { error: errorText || "API error" },
-          { status: response.status }
-        );
-      }
-    }
+    // Create a readable stream that proxies Groq chunks and saves history at the end
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        let fullContent = "";
 
-    if (wantsSSE) {
-      // Sanitize and proxy the SSE stream to the client
-      const headers = new Headers({
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache, no-transform",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-      });
-
-      const encoder = new TextEncoder();
-      const decoder = new TextDecoder();
-      const upstream = response.body;
-      if (!upstream) {
-        return NextResponse.json(
-          { error: "Upstream stream missing" },
-          { status: 502 }
-        );
-      }
-
-      const stream = new ReadableStream<Uint8Array>({
-        start: async (controller) => {
-          const reader = upstream.getReader();
-          let buffer = "";
-          // Periodic SSE keep-alive comments to prevent idle timeouts on proxies/browsers
-          const keepAliveMs = Number(process.env.SSE_KEEPALIVE_MS) || 15000;
-          const sendKeepAlive = () => {
-            try { controller.enqueue(encoder.encode(": keep-alive\n\n")); } catch { }
-          };
-          // Send an initial keep-alive to open the stream promptly
-          // Also advise client on reconnection delay if needed
-          try { controller.enqueue(encoder.encode(`retry: ${keepAliveMs}\n\n`)); } catch { }
-          sendKeepAlive();
-          const abortHandler = () => {
-            try { reader.cancel(); } catch { }
-          };
-          try { request.signal.addEventListener("abort", abortHandler); } catch { }
-          let keepAliveTimer: ReturnType<typeof setInterval> = setInterval(sendKeepAlive, keepAliveMs);
-          let sawDone = false;
-          try {
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) break;
-              if (value) buffer += decoder.decode(value, { stream: true });
-
-              let idx: number;
-              while ((idx = buffer.indexOf("\n\n")) !== -1) {
-                const rawEvent = buffer.slice(0, idx);
-                buffer = buffer.slice(idx + 2);
-
-                const lines = rawEvent.split("\n");
-                for (const line of lines) {
-                  if (!line.startsWith("data:")) continue;
-                  const data = line.slice(5).trim();
-                  if (!data) continue;
-                  if (data === "[DONE]") {
-                    controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-                    sawDone = true;
-                    break;
-                  }
-                  try {
-                    const obj = JSON.parse(data);
-                    const choice = obj?.choices?.[0];
-                    if (choice && choice.delta && typeof choice.delta.content === "string") {
-                      choice.delta.content = sanitizeAIText(choice.delta.content);
-                    }
-                    if (choice && typeof choice.text === "string") {
-                      choice.text = sanitizeAIText(choice.text);
-                    }
-                    const out = `data: ${JSON.stringify(obj)}\n\n`;
-                    controller.enqueue(encoder.encode(out));
-                  } catch (e) {
-                    // Forward raw data line if not JSON (keep-alive/comments)
-                    controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-                  }
-                }
-                if (sawDone) break;
-              }
-              if (sawDone) break;
+        try {
+          for await (const chunk of completion) {
+            const content = chunk.choices[0]?.delta?.content || "";
+            if (content) {
+              fullContent += content;
+              // Format SSE: data: {"choices":[{"delta":{"content":"..."}}]}
+              const ssePayload = `data: ${JSON.stringify({
+                choices: [{ delta: { content } }]
+              })}\n\n`;
+              controller.enqueue(encoder.encode(ssePayload));
             }
-          } catch (e) {
-            // On error, terminate stream
-          } finally {
-            try { clearInterval(keepAliveTimer); } catch { }
-            try { request.signal.removeEventListener("abort", abortHandler); } catch { }
-            try { controller.close(); } catch { }
-            try { await reader.cancel(); } catch { }
           }
-        },
-      });
+          // Signal done to client
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        } catch (err) {
+          console.error("Stream error:", err);
+          controller.error(err);
+        } finally {
+          controller.close();
 
-      return new Response(stream, { status: 200, headers });
-    }
+          // Save history to Supabase ONLY after streaming is done
+          if (chatId && typeof chatId === "string" && fullContent.trim()) {
+            const sanitizedContent = sanitizeAIText(fullContent);
+            if (sanitizedContent) {
+              const { error } = await supabase.from("messages").insert({
+                role: "assistant",
+                content: sanitizedContent,
+                chat_id: chatId,
+                user_id: user?.id,
+              });
+              if (error) {
+                console.error("Failed to save assistant message:", error);
+              }
+            }
+          }
+        }
+      },
+    });
 
-    // Non-streaming: return sanitized JSON
-    const json = await response.json();
-    const choice = json?.choices?.[0] || {};
-    const rawContent: string = (choice.message?.content as string) || (choice.text as string) || "";
-    const content = sanitizeAIText(rawContent);
-    return NextResponse.json({ content });
+    const headers = new Headers({
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    return new Response(stream, { headers });
+
   } catch (error: unknown) {
     console.error("Chat API error:", error);
     const errorMessage = error instanceof Error ? error.message : "Failed to process request";

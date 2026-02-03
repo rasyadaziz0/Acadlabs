@@ -93,7 +93,7 @@ export async function generateTitleWithGroq(content: string): Promise<string | n
           content: content
         }
       ],
-      model: process.env.GROQ_MODEL || "mixtral-8x7b-32768",
+      model: "llama3-8b-8192", // Fast/Cheap model for titles
       temperature: 0.5,
       max_tokens: 20,
     });
