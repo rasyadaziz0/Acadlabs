@@ -2,7 +2,7 @@ import { useState, useRef, useMemo } from "react";
 import { Message } from "@/components/chat/ChatMessage";
 import { createBrowserClient } from "@supabase/ssr";
 import { toast } from "sonner";
-import { handleFileUpload } from "@/lib/upload-client";
+import { handleFileUpload } from "@/lib/upload-client"; // Assume this returns { content: "OCR Text" }
 import { sanitizeUserText, sanitizeAIText, sanitizeSearchQuery } from "@/lib/sanitize";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -118,6 +118,7 @@ export function useChatActions(
                 }
             }
         } finally {
+            // Final flush
             if (pendingChunk) {
                 setMessages(prev => {
                     const idx = prev.findIndex(m => m.id === streamMessageId);
@@ -143,10 +144,10 @@ export function useChatActions(
         const { data: userData } = await supabase.auth.getUser();
         if (!userData.user) return;
 
-        const cleanQuery = sanitizeUserText(input);
         const hasFile = !!attachedFile;
+        // Marker for UI to show attachment icon (optional logic could handle this better)
         const attachmentMarker = hasFile ? `::attachment[name="${attachedFile.name}",size=${attachedFile.size}]` : "";
-        const composedContent = hasFile ? `${attachmentMarker}\n${cleanQuery}` : cleanQuery;
+        const originalInput = sanitizeUserText(input);
 
         // Init Chat ID
         let currentChatId = chatId;
@@ -164,7 +165,7 @@ export function useChatActions(
         const userMessage: Message = {
             id: tempId,
             role: "user",
-            content: composedContent,
+            content: hasFile ? `${attachmentMarker}\n${originalInput}` : originalInput,
             chat_id: currentChatId!,
             user_id: userData.user.id,
             created_at: new Date().toISOString(),
@@ -173,13 +174,48 @@ export function useChatActions(
         setMessages((prev) => clampLastNMessages([...prev, userMessage], HISTORY_LIMIT));
         setInput("");
         setIsLoading(true);
+        setIsStreaming(true);
+
+        // Prep Stream Placeholder
+        const streamMessageId = crypto.randomUUID();
+        const assistantPlaceholder: Message = {
+            id: streamMessageId,
+            role: "assistant",
+            content: "",
+            chat_id: currentChatId!,
+            user_id: userData.user.id,
+            created_at: new Date().toISOString(),
+        };
+        setStreamingAssistantId(streamMessageId);
+        setMessages(prev => clampLastNMessages([...prev, assistantPlaceholder], HISTORY_LIMIT));
 
         try {
             // Search
             let searchResult: any[] = [];
             if (useSearch && !hasFile) searchResult = await handleSearch();
 
-            // Persist User Message
+            // Handle File First (OCR)
+            let finalContentForAI = originalInput;
+            if (hasFile) {
+                // We use handleFileUpload which uses Gemini to get OCR text
+                const res = await handleFileUpload(attachedFile!);
+                // We do NOT save this as assistant message anymore.
+                // We treat this as Context for the AI.
+                const ocrText = res.content || "[No text found in image]";
+
+                // Construct prompts
+                finalContentForAI = `User Input: ${originalInput}\n\n[Attached Image Content/OCR Result]:\n${ocrText}`;
+
+                // Update the persisted user message to include this context? 
+                // NO, keep user message clean in DB for history legibility (or maybe include it?), 
+                // but for now, we just pass it to the AI prompt without saving giant OCR blob to user message if not needed.
+                // Actually, saving it is better for context resume. 
+                // Let's stick to saving the original user input to DB, but sending the composite to the LLM.
+                // For DB persistence of the file context, handleFileUpload usually saves the file ref.
+                // We will rely on the "User just sent this" context.
+            }
+
+            // Persist User Message (Clean version)
             const { data: savedUserMsg } = await supabase.from("messages").insert({
                 role: "user",
                 content: userMessage.content,
@@ -191,49 +227,40 @@ export function useChatActions(
                 setMessages(prev => prev.map(m => m.id === tempId ? savedUserMsg as Message : m));
             }
 
-            // File Upload logic
-            if (hasFile) {
-                const res = await handleFileUpload(attachedFile!);
-                const sanitizedAssistant = sanitizeAIText(res.content || "");
-                await supabase.from("messages").insert({
-                    role: "assistant", content: sanitizedAssistant,
-                    chat_id: currentChatId!, user_id: userData.user.id
-                });
+            // Call Chat API with Streaming
+            const response = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+                body: JSON.stringify({
+                    // If file, we inject the specific prompt. If not, just messages.
+                    // IMPORTANT: We need to replace the last message content with our composite content if it changed.
+                    messages: [
+                        ...messages,
+                        {
+                            role: "user",
+                            content: finalContentForAI
+                        }
+                    ],
+                    searchResults: searchResult,
+                    chatId: currentChatId
+                })
+            });
+
+            if (!response.ok) {
+                const errorJson = await response.json();
+                throw new Error(errorJson.error || "API Failure");
             }
-            else {
-                // TEXT STREAMING FLOW
-                setIsStreaming(true);
-                const streamMessageId = crypto.randomUUID();
-                const assistantPlaceholder: Message = {
-                    id: streamMessageId,
-                    role: "assistant",
-                    content: "",
-                    chat_id: currentChatId!,
-                    user_id: userData.user.id,
-                    created_at: new Date().toISOString(),
-                };
-                setStreamingAssistantId(streamMessageId);
-                setMessages(prev => clampLastNMessages([...prev, assistantPlaceholder], HISTORY_LIMIT));
 
-                const response = await fetch("/api/chat", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
-                    body: JSON.stringify({
-                        messages: [...messages, userMessage],
-                        searchResults: searchResult,
-                        chatId: currentChatId
-                    })
-                });
+            if (!response.body) throw new Error("No response body");
 
-                if (!response.ok || !response.body) throw new Error("API Failure");
-
-                const reader = response.body.getReader();
-                await processReader(reader, streamMessageId);
-            }
+            const reader = response.body.getReader();
+            await processReader(reader, streamMessageId);
 
         } catch (e: any) {
             console.error(e);
             toast.error("Gagal mengirim pesan: " + e.message);
+            // Remove the placeholder if it failed
+            setMessages(prev => prev.filter(m => m.id !== streamMessageId));
         } finally {
             setIsLoading(false);
             setIsStreaming(false);
@@ -251,7 +278,9 @@ export function useChatActions(
         setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
     };
 
-    const handleResendFromMessage = async (msg: Message) => { };
+    const handleResendFromMessage = async (msg: Message) => {
+        // Implementation for resend
+    };
 
     return {
         input, setInput,

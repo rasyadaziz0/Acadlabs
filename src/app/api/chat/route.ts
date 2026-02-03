@@ -39,6 +39,10 @@ export async function POST(request: NextRequest) {
       }
     );
     const { data: { user } } = await supabase.auth.getUser();
+
+    // Security Check: User must be logged in (optional depending on app logic, but generally required for persistence)
+    // If saving to DB is critical, we should probably enforce it. But to allow guest chat:
+    const userId = user?.id;
     const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || "Teman";
 
     // 2. Validate
@@ -48,9 +52,10 @@ export async function POST(request: NextRequest) {
 
     const groqKeys = getGroqKeys();
     if (groqKeys.length === 0) {
-      return NextResponse.json({ error: "No API Keys" }, { status: 500 });
+      return NextResponse.json({ error: "No API Keys configured" }, { status: 500 });
     }
-    const apiKey = groqKeys[0];
+    // Randomize key to distribute load
+    const apiKey = groqKeys[Math.floor(Math.random() * groqKeys.length)];
     const groq = new Groq({ apiKey });
 
     const incoming: ChatMessage[] = (messages as unknown[]).filter(isChatMessage) as ChatMessage[];
@@ -59,10 +64,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User message empty" }, { status: 400 });
     }
 
-    // 3. Auto Title (Fire & Forget)
+    // 3. Auto Title (Fire & Forget) - Only if it's the first message
     if (chatId && typeof chatId === "string" && incoming.length === 1 && incoming[0].role === "user") {
       const first = incoming[0].content;
       (async () => {
+        // Delay slightly to let the main logic proceed
+        await new Promise(r => setTimeout(r, 100));
         try {
           const t = await generateChatTitle(first);
           if (t) await supabase.from("chats").update({ title: t }).eq("id", chatId);
@@ -91,7 +98,8 @@ Language: Adaptive (Indonesian/English).`
       content: `Gunakan Markdown.
 Math: $inline$ atau $$block$$.
 Code: Pakai code fences.
-Jawab to the point.`
+Jawab to the point.
+Jika user bertanya yang tidak relevan dengan akademik, jawab sopan tapi arahkan kembali.`
     };
 
     const finalMessages = [systemPersona, systemInstructions, ...formatted];
@@ -108,13 +116,21 @@ Jawab to the point.`
     );
 
     // 6. Stream Call
-    const stream = await groq.chat.completions.create({
-      model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-      messages: trimmed as any,
-      temperature: 0.7,
-      max_tokens: Number(process.env.GROQ_MAX_TOKENS) || 4048,
-      stream: true,
-    });
+    let stream;
+    try {
+      stream = await groq.chat.completions.create({
+        model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+        messages: trimmed as any,
+        temperature: 0.7,
+        max_tokens: Number(process.env.GROQ_MAX_TOKENS) || 4048,
+        stream: true,
+      });
+    } catch (e: any) {
+      if (e.status === 429) {
+        return NextResponse.json({ error: "Sistem sedang sibuk (Rate Limit). Coba beberapa saat lagi." }, { status: 429 });
+      }
+      throw e;
+    }
 
     // 7. Readable Stream Response
     const responseStream = new ReadableStream({
@@ -137,13 +153,13 @@ Jawab to the point.`
           controller.error(err);
         } finally {
           controller.close();
-          // 8. Save to DB
-          if (chatId && typeof chatId === "string" && fullContent.trim()) {
+          // 8. Save to DB (Delayed Persistence)
+          if (userId && chatId && typeof chatId === "string" && fullContent.trim()) {
             await supabase.from("messages").insert({
               role: "assistant",
               content: sanitizeAIText(fullContent),
               chat_id: chatId,
-              user_id: user?.id
+              user_id: userId
             });
           }
         }
@@ -161,6 +177,6 @@ Jawab to the point.`
 
   } catch (err: any) {
     console.error("API Panic:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Internal Server Error" }, { status: 500 });
   }
 }

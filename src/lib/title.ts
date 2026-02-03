@@ -18,7 +18,7 @@ export async function generateChatTitle(content: string): Promise<string | null>
       messages: [
         {
           role: "system",
-          content: "Generate a chat title in 2-3 words based on the user's message. Output ONLY the title, no quotes."
+          content: "Generate a chat title in 3-5 words based on the user's message. Output ONLY the title, no quotes."
         },
         {
           role: "user",
@@ -27,7 +27,7 @@ export async function generateChatTitle(content: string): Promise<string | null>
       ],
       model: "llama3-8b-8192",
       temperature: 0.5,
-      max_tokens: 15,
+      max_tokens: 20,
     });
 
     const title = completion.choices[0]?.message?.content?.trim();
