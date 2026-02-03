@@ -69,7 +69,6 @@ export function useChatActions(
             rafPending = true;
             requestAnimationFrame(() => {
                 const now = performance.now();
-                // Flush if enough time passed or chunk is large enough
                 if (now - lastFlush > 30 || pendingChunk.length > 20) {
                     const chunk = pendingChunk;
                     pendingChunk = "";
@@ -119,7 +118,6 @@ export function useChatActions(
                 }
             }
         } finally {
-            // Final flush ensuring nothing left behind
             if (pendingChunk) {
                 setMessages(prev => {
                     const idx = prev.findIndex(m => m.id === streamMessageId);
@@ -150,7 +148,7 @@ export function useChatActions(
         const attachmentMarker = hasFile ? `::attachment[name="${attachedFile.name}",size=${attachedFile.size}]` : "";
         const composedContent = hasFile ? `${attachmentMarker}\n${cleanQuery}` : cleanQuery;
 
-        // Init Chat ID if needed
+        // Init Chat ID
         let currentChatId = chatId;
         if (!currentChatId) {
             const { data: newChat } = await supabase.from("chats").insert({ user_id: userData.user.id, message: "", role: "user" }).select("id").single();
@@ -201,7 +199,6 @@ export function useChatActions(
                     role: "assistant", content: sanitizedAssistant,
                     chat_id: currentChatId!, user_id: userData.user.id
                 });
-                // Reload or manual append here (skipping for this task focus)
             }
             else {
                 // TEXT STREAMING FLOW
@@ -254,7 +251,7 @@ export function useChatActions(
         setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
     };
 
-    const handleResendFromMessage = async (msg: Message) => { }; // Placeholder
+    const handleResendFromMessage = async (msg: Message) => { };
 
     return {
         input, setInput,

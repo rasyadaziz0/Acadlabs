@@ -25,9 +25,10 @@ function isChatMessage(val: unknown): val is ChatMessage {
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages, searchResults, chatId } = (await request.json()) as Record<string, unknown>;
+    const body = await request.json();
+    const { messages, searchResults, chatId } = body as Record<string, unknown>;
 
-    // 1. Supabase Setup
+    // 1. Supabase & User
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -40,14 +41,14 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || "Teman";
 
-    // 2. Validation
+    // 2. Validate
     if (!messages || !Array.isArray(messages)) {
-      return NextResponse.json({ error: "Invalid request format" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
     const groqKeys = getGroqKeys();
     if (groqKeys.length === 0) {
-      return NextResponse.json({ error: "Server AI problem (No API Keys)" }, { status: 500 });
+      return NextResponse.json({ error: "No API Keys" }, { status: 500 });
     }
     const apiKey = groqKeys[0];
     const groq = new Groq({ apiKey });
@@ -55,29 +56,26 @@ export async function POST(request: NextRequest) {
     const incoming: ChatMessage[] = (messages as unknown[]).filter(isChatMessage) as ChatMessage[];
     const hasUserMessage = incoming.some(m => m.role === "user" && m.content.trim().length > 0);
     if (!hasUserMessage) {
-      return NextResponse.json({ error: "Message is empty" }, { status: 400 });
+      return NextResponse.json({ error: "User message empty" }, { status: 400 });
     }
 
-    // 3. Auto Title (First Message)
+    // 3. Auto Title (Fire & Forget)
     if (chatId && typeof chatId === "string" && incoming.length === 1 && incoming[0].role === "user") {
-      const firstContent = incoming[0].content;
+      const first = incoming[0].content;
       (async () => {
         try {
-          const newTitle = await generateChatTitle(firstContent);
-          if (newTitle) {
-            await supabase.from("chats").update({ title: newTitle }).eq("id", chatId);
-          }
+          const t = await generateChatTitle(first);
+          if (t) await supabase.from("chats").update({ title: t }).eq("id", chatId);
         } catch (e) {
-          console.error("Auto title failed", e);
+          console.error("Auto title error", e);
         }
       })();
     }
 
-    // 4. Formatting & Prompting
-    const formattedMessages: ChatMessage[] = incoming.map((msg) => {
-      const raw = msg.content;
-      if (msg.role === "user") return { role: msg.role, content: sanitizeUserText(raw) };
-      return { role: msg.role, content: normalizeWhitespaceKeepEdges(raw) };
+    // 4. Formatter
+    const formatted: ChatMessage[] = incoming.map((msg) => {
+      if (msg.role === "user") return { role: "user", content: sanitizeUserText(msg.content) };
+      return { role: msg.role, content: normalizeWhitespaceKeepEdges(msg.content) };
     });
 
     const systemPersona: ChatMessage = {
@@ -96,36 +94,36 @@ Code: Pakai code fences.
 Jawab to the point.`
     };
 
-    const finalMessages = [systemPersona, systemInstructions, ...formattedMessages];
+    const finalMessages = [systemPersona, systemInstructions, ...formatted];
 
     if (Array.isArray(searchResults) && searchResults.length > 0) {
       const sr = searchResults.map((r: any) => `- ${r.title} (${r.url}): ${r.description}`).join("\n");
       finalMessages.push({ role: "system", content: `Search Context:\n${sr}` });
     }
 
-    // 5. Token Limit
-    const trimmedMessages = trimMessagesForBudget(
+    // 5. Trim
+    const trimmed = trimMessagesForBudget(
       finalMessages,
       Number(process.env.GROQ_MAX_INPUT_TOKENS) || 6000
     );
 
-    // 6. Groq Stream
-    const completion = await groq.chat.completions.create({
+    // 6. Stream Call
+    const stream = await groq.chat.completions.create({
       model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-      messages: trimmedMessages as any,
+      messages: trimmed as any,
       temperature: 0.7,
       max_tokens: Number(process.env.GROQ_MAX_TOKENS) || 4048,
       stream: true,
     });
 
-    // 7. ReadableStream Response
-    const stream = new ReadableStream({
+    // 7. Readable Stream Response
+    const responseStream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
         let fullContent = "";
 
         try {
-          for await (const chunk of completion) {
+          for await (const chunk of stream) {
             const content = chunk.choices[0]?.delta?.content || "";
             if (content) {
               fullContent += content;
@@ -139,7 +137,7 @@ Jawab to the point.`
           controller.error(err);
         } finally {
           controller.close();
-          // 8. Delayed Persistence
+          // 8. Save to DB
           if (chatId && typeof chatId === "string" && fullContent.trim()) {
             await supabase.from("messages").insert({
               role: "assistant",
@@ -152,16 +150,17 @@ Jawab to the point.`
       }
     });
 
-    return new Response(stream, {
+    return new Response(responseStream, {
       headers: {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive"
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no"
       }
     });
 
   } catch (err: any) {
-    console.error("API Error:", err);
+    console.error("API Panic:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

@@ -3,7 +3,45 @@ import Groq from "groq-sdk";
 import { getGroqKeys } from "./ai-service";
 
 /* -------------------------------------------------------------------------- */
-/*                               Helper Regex                                 */
+/*                          AI Title Generation                               */
+/* -------------------------------------------------------------------------- */
+
+export async function generateChatTitle(content: string): Promise<string | null> {
+  const keys = getGroqKeys();
+  if (!keys.length) return null;
+
+  const apiKey = keys[0];
+  const groq = new Groq({ apiKey });
+
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "Generate a chat title in 2-3 words based on the user's message. Output ONLY the title, no quotes."
+        },
+        {
+          role: "user",
+          content: content
+        }
+      ],
+      model: "llama3-8b-8192",
+      temperature: 0.5,
+      max_tokens: 15,
+    });
+
+    const title = completion.choices[0]?.message?.content?.trim();
+    if (title) {
+      return title.replace(/^["']|["']$/g, '');
+    }
+  } catch (error) {
+    console.error("Error generating title with Groq:", error);
+  }
+  return null;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                          Legacy Fallback Logic                             */
 /* -------------------------------------------------------------------------- */
 
 function removeLeadingPhrases(s: string): string {
@@ -60,10 +98,6 @@ function trimLength(s: string, max = 40): string {
   return cut.trim().replace(/[\s,:;\-]+$/g, "") + "…";
 }
 
-/* -------------------------------------------------------------------------- */
-/*                          Legacy Fallback Logic                             */
-/* -------------------------------------------------------------------------- */
-
 export function generateChatTitleFromUserInput(text: string): string {
   let s = normalizeWhitespace(String(text ?? ""));
   s = s.replace(/^#+\s*/, "");
@@ -76,43 +110,4 @@ export function generateChatTitleFromUserInput(text: string): string {
   if (!s) return "Untitled Chat";
   const cased = titleCaseSmart(s);
   return trimLength(cased, 40);
-}
-
-/* -------------------------------------------------------------------------- */
-/*                          AI Title Generation                               */
-/* -------------------------------------------------------------------------- */
-
-export async function generateChatTitle(content: string): Promise<string | null> {
-  const keys = getGroqKeys();
-  if (!keys.length) return null;
-
-  // Utilize the first available key
-  const apiKey = keys[0];
-  const groq = new Groq({ apiKey });
-
-  try {
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: "Generate a chat title in 2-3 words based on the user's message. Output ONLY the title, no quotes."
-        },
-        {
-          role: "user",
-          content: content
-        }
-      ],
-      model: "llama3-8b-8192",
-      temperature: 0.5,
-      max_tokens: 15,
-    });
-
-    const title = completion.choices[0]?.message?.content?.trim();
-    if (title) {
-      return title.replace(/^["']|["']$/g, '');
-    }
-  } catch (error) {
-    console.error("Error generating title with Groq:", error);
-  }
-  return null;
 }
