@@ -86,7 +86,7 @@ export async function generateTitleWithGroq(content: string): Promise<string | n
       messages: [
         {
           role: "system",
-          content: "You are a helpful assistant. Generate a very short, concise title (max 4 words) for the following user message. Do not use quotes. Return ONLY the title."
+          content: "You are a helpful assistant. Generate a very short, concise title (2-3 words) for the following user message. Do not use quotes. Return ONLY the title."
         },
         {
           role: "user",
