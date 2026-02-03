@@ -2,8 +2,8 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { Message } from "@/components/chat/ChatMessage";
 import { createBrowserClient } from "@supabase/ssr";
 import { toast } from "sonner";
-import { handleFileUpload } from "@/lib/upload-client"; // Assume this returns { content: "OCR Text" }
-import { sanitizeUserText, sanitizeAIText, sanitizeSearchQuery } from "@/lib/sanitize";
+import { handleFileUpload } from "@/lib/upload-client";
+import { sanitizeUserText, sanitizeSearchQuery } from "@/lib/sanitize";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
@@ -35,6 +35,14 @@ export function useChatActions(
             ),
         []
     );
+
+    // Double-lock cleanup: Force clear search results when idle with delay for smoothness
+    useEffect(() => {
+        if (!isLoading && !isStreaming && searchResults.length > 0) {
+            const timer = setTimeout(() => setSearchResults([]), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [isLoading, isStreaming, searchResults.length]);
 
     const handleSearch = async (): Promise<any[]> => {
         if (!input.trim()) return [];
@@ -145,7 +153,6 @@ export function useChatActions(
         if (!userData.user) return;
 
         const hasFile = !!attachedFile;
-        // Marker for UI to show attachment icon (optional logic could handle this better)
         const attachmentMarker = hasFile ? `::attachment[name="${attachedFile.name}",size=${attachedFile.size}]` : "";
         const originalInput = sanitizeUserText(input);
 
@@ -197,22 +204,9 @@ export function useChatActions(
             // Handle File First (OCR)
             let finalContentForAI = originalInput;
             if (hasFile) {
-                // We use handleFileUpload which uses Gemini to get OCR text
                 const res = await handleFileUpload(attachedFile!);
-                // We do NOT save this as assistant message anymore.
-                // We treat this as Context for the AI.
                 const ocrText = res.content || "[No text found in image]";
-
-                // Construct prompts
                 finalContentForAI = `User Input: ${originalInput}\n\n[Attached Image Content/OCR Result]:\n${ocrText}`;
-
-                // Update the persisted user message to include this context? 
-                // NO, keep user message clean in DB for history legibility (or maybe include it?), 
-                // but for now, we just pass it to the AI prompt without saving giant OCR blob to user message if not needed.
-                // Actually, saving it is better for context resume. 
-                // Let's stick to saving the original user input to DB, but sending the composite to the LLM.
-                // For DB persistence of the file context, handleFileUpload usually saves the file ref.
-                // We will rely on the "User just sent this" context.
             }
 
             // Persist User Message (Clean version)
@@ -232,8 +226,6 @@ export function useChatActions(
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
                 body: JSON.stringify({
-                    // If file, we inject the specific prompt. If not, just messages.
-                    // IMPORTANT: We need to replace the last message content with our composite content if it changed.
                     messages: [
                         ...messages,
                         {
@@ -259,23 +251,15 @@ export function useChatActions(
         } catch (e: any) {
             console.error(e);
             toast.error("Gagal mengirim pesan: " + e.message);
-            // Remove the placeholder if it failed
             setMessages(prev => prev.filter(m => m.id !== streamMessageId));
         } finally {
             setIsLoading(false);
             setIsStreaming(false);
             setStreamingAssistantId(null);
             setAttachedFile(null);
-            setSearchResults([]);
+            setSearchResults([]); // Cleanup in finally block too
         }
     };
-
-    // Double-lock cleanup: Force clear search results when idle
-    useEffect(() => {
-        if (!isLoading && !isStreaming && searchResults.length > 0) {
-            setSearchResults([]);
-        }
-    }, [isLoading, isStreaming, searchResults.length]);
 
     const handleStop = () => {
         setIsStreaming(false);

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { ExternalLink, Search, Globe, ChevronRight } from "lucide-react";
+import { ExternalLink, Search, Globe } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 export interface SearchResult {
@@ -95,7 +95,7 @@ export default function SearchResults({ results, isSearching }: SearchResultsPro
                 transition={{ duration: 0.4, delay: idx * 0.1, type: "spring", stiffness: 100 }}
                 whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
                 whileTap={{ scale: 0.98 }}
-                className="flex-none snap-start w-72 h-auto min-h-[140px] bg-card hover:bg-muted/30 border border-border/60 hover:border-blue-500/30 rounded-xl p-4 flex flex-col justify-between transition-all cursor-pointer shadow-sm hover:shadow-md group/card relative overflow-hidden"
+                className="flex-none snap-start w-64 h-auto min-h-[140px] bg-card hover:bg-muted/30 border border-border/60 hover:border-blue-500/30 rounded-xl p-4 flex flex-col justify-between transition-all cursor-pointer shadow-sm hover:shadow-md group/card relative overflow-hidden"
               >
                 {/* Decorative gradient blob */}
                 <div className="absolute -top-10 -right-10 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl group-hover/card:bg-blue-500/10 transition-colors" />
@@ -104,7 +104,7 @@ export default function SearchResults({ results, isSearching }: SearchResultsPro
                   <h3 className="font-semibold text-sm text-foreground line-clamp-2 leading-relaxed mb-1.5 group-hover/card:text-blue-500 transition-colors">
                     {cleanText(result.title)}
                   </h3>
-                  <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                     {cleanText(result.description)}
                   </p>
                 </div>
@@ -112,7 +112,6 @@ export default function SearchResults({ results, isSearching }: SearchResultsPro
                 <div className="relative z-10 flex items-center justify-between mt-3 pt-3 border-t border-border/40">
                   <div className="flex items-center gap-2 overflow-hidden">
                     <div className="p-1 rounded-md bg-background border border-border/50 shadow-sm shrink-0">
-                      {/* Attempt to fetch favicon, fallback to Globe icon */}
                       <img
                         src={`https://www.google.com/s2/favicons?domain=${getDomain(result.url)}&sz=32`}
                         alt=""
