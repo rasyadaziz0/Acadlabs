@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Heart } from "lucide-react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 import {
@@ -34,8 +35,8 @@ export default async function DashboardLayout({
           return cookieStore.get(name)?.value;
         },
         // No-op in layout to avoid TS/runtime issues; route handlers can set cookies when needed
-        set(_name: string, _value: string, _options: CookieOptions) {},
-        remove(_name: string, _options: CookieOptions) {},
+        set(_name: string, _value: string, _options: CookieOptions) { },
+        remove(_name: string, _options: CookieOptions) { },
       },
     }
   );
@@ -57,8 +58,9 @@ export default async function DashboardLayout({
         </SidebarContent>
         <SidebarFooter>
           <div className="p-1 w-full">
+
             <Button asChild variant="ghost" className="w-full justify-start h-auto px-2 py-2 rounded-lg">
-              <a href="/donatur" className="flex w-full items-center" aria-label="Buka halaman Donatur">
+              <Link href="/donatur" className="flex w-full items-center" aria-label="Buka halaman Donatur">
                 <span className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pink-600/10 text-pink-600 dark:bg-pink-500/10 dark:text-pink-400">
                   <Heart className="h-4 w-4" />
                 </span>
@@ -66,7 +68,7 @@ export default async function DashboardLayout({
                   <span className="text-sm font-medium leading-5">Donasi maintenance</span>
                   <span className="text-xs text-muted-foreground break-words">Bisa kali buat maintenance server 😁</span>
                 </div>
-              </a>
+              </Link>
             </Button>
           </div>
         </SidebarFooter>

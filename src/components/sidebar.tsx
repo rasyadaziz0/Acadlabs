@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "./ui/button";
 import { Plus, MoreVertical, Pencil, Trash2, Code, Calculator, Heart } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
 import { motion } from "framer-motion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
@@ -26,7 +27,7 @@ type ChatAction = {
 };
 
 type SidebarProps = {
-  variant?: "page" | "panel"; // page: desktop left column; panel: content for mobile sheet
+  variant?: "page" | "panel";
 };
 
 export default function Sidebar({ variant = "page" }: SidebarProps) {
@@ -47,14 +48,12 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
     const fetchChats = async () => {
       setIsLoading(true);
 
-      // Get current user
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
         setIsLoading(false);
         return;
       }
 
-      // Fetch only chats belonging to the current user
       const { data: chatsData, error } = await supabase
         .from("chats")
         .select("*")
@@ -81,7 +80,7 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
       .insert({
         user_id: userData.user.id,
         message: "",
-        role: "user", // required by schema
+        role: "user",
       })
       .select()
       .single();
@@ -128,7 +127,6 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
       return;
     }
 
-    // Update local state
     setChats(chats.map(chat =>
       chat.id === selectedChat.id ? { ...chat, title: newChatName } : chat
     ));
@@ -153,10 +151,8 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
       return;
     }
 
-    // Update local state
     setChats(chats.filter(chat => chat.id !== chatId));
 
-    // If the deleted chat is the current one, redirect to /chat
     if (pathname === `/chat/${chatId}`) {
       router.push("/chat");
     }
@@ -178,11 +174,13 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
             className="group relative"
           >
             <Button
+              asChild
               variant={pathname === `/chat/${chat.id}` ? "secondary" : "ghost"}
               className="w-full justify-start truncate text-left rounded-lg py-2 pr-8 text-sm"
-              onClick={() => router.push(`/chat/${chat.id}`)}
             >
-              {chat.title && chat.title.trim().length > 0 ? chat.title : "Untitled Chat"}
+              <Link href={`/chat/${chat.id}`}>
+                {chat.title && chat.title.trim().length > 0 ? chat.title : "Untitled Chat"}
+              </Link>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -218,14 +216,6 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
     </div>
   );
 
-  const navigateToCodeRunner = () => {
-    router.push("/code-runner");
-  };
-
-  const navigateToMath = () => {
-    router.push("/math");
-  };
-
   const Panel = () => (
     <div className="flex h-full flex-col">
       <div className="flex flex-col space-y-4 p-4 pt-10">
@@ -243,20 +233,24 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
         <div className="mb-1 text-xs font-medium text-muted-foreground ml-3 mt-3">Menu</div>
         <div className="space-y-1 mb-4">
           <Button
+            asChild
             variant={pathname === "/math" ? "secondary" : "ghost"}
             className="w-full justify-start gap-2 text-left rounded-lg py-2 text-sm"
-            onClick={() => router.push("/math")}
           >
-            <Calculator className="h-4 w-4" />
-            Math Solver
+            <Link href="/math">
+              <Calculator className="h-4 w-4" />
+              Math Solver
+            </Link>
           </Button>
           <Button
+            asChild
             variant={pathname === "/editor" ? "secondary" : "ghost"}
             className="w-full justify-start gap-2 text-left rounded-lg py-2 text-sm"
-            onClick={() => router.push("/editor")}
           >
-            <Code className="h-4 w-4" />
-            Reason Code
+            <Link href="/editor">
+              <Code className="h-4 w-4" />
+              Reason Code
+            </Link>
           </Button>
         </div>
 
@@ -265,7 +259,7 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
       </div>
       <div className="p-3 border-t">
         <Button asChild variant="ghost" className="w-full justify-start h-auto px-2 py-2 rounded-lg">
-          <a href="https://tako.id/Acadlabs" target="_blank" rel="noopener noreferrer" className="flex w-full items-center">
+          <Link href="/donatur" className="flex w-full items-center">
             <span className="mr-3 flex h-8 w-8 items-center justify-center rounded-full bg-pink-600/10 text-pink-600 dark:bg-pink-500/10 dark:text-pink-400">
               <Heart className="h-4 w-4" />
             </span>
@@ -273,7 +267,7 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
               <span className="text-sm font-medium leading-5">Donasi maintenance</span>
               <span className="text-xs text-muted-foreground">tako.id/Acadlabs</span>
             </span>
-          </a>
+          </Link>
         </Button>
       </div>
     </div>
@@ -331,20 +325,24 @@ export default function Sidebar({ variant = "page" }: SidebarProps) {
               <div className="mb-1 text-xs font-medium text-muted-foreground ml-3 mt-3">Menu</div>
               <div className="space-y-1 mb-4">
                 <Button
+                  asChild
                   variant={pathname === "/math" ? "secondary" : "ghost"}
                   className="w-full justify-start gap-2 text-left rounded-lg py-2 text-sm"
-                  onClick={() => router.push("/math")}
                 >
-                  <Calculator className="h-4 w-4" />
-                  Math Solver
+                  <Link href="/math">
+                    <Calculator className="h-4 w-4" />
+                    Math Solver
+                  </Link>
                 </Button>
                 <Button
+                  asChild
                   variant={pathname === "/editor" ? "secondary" : "ghost"}
                   className="w-full justify-start gap-2 text-left rounded-lg py-2 text-sm"
-                  onClick={() => router.push("/editor")}
                 >
-                  <Code className="h-4 w-4" />
-                  Reason Code
+                  <Link href="/editor">
+                    <Code className="h-4 w-4" />
+                    Reason Code
+                  </Link>
                 </Button>
               </div>
 

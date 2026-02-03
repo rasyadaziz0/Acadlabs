@@ -2,11 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Send, Search, Paperclip, X } from "lucide-react"
+import { ArrowUp, Search, Plus, X, Globe, Mic, Image as ImageIcon, FileText, AudioLines } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface UseAutoResizeTextareaProps {
   minHeight: number
@@ -26,16 +32,23 @@ function useAutoResizeTextarea({
 
       if (reset) {
         textarea.style.height = `${minHeight}px`
+        textarea.style.overflowY = "hidden"
         return
       }
 
+      // Temporarily set height to auto/minHeight to get correct scrollHeight
       textarea.style.height = `${minHeight}px`
+
+      const scrollHeight = textarea.scrollHeight
+      const isScrollable = scrollHeight > (maxHeight ?? Number.POSITIVE_INFINITY)
+
       const newHeight = Math.max(
         minHeight,
-        Math.min(textarea.scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY)
+        Math.min(scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY)
       )
 
       textarea.style.height = `${newHeight}px`
+      textarea.style.overflowY = isScrollable ? "auto" : "hidden"
     },
     [minHeight, maxHeight]
   )
@@ -44,6 +57,7 @@ function useAutoResizeTextarea({
     const textarea = textareaRef.current
     if (textarea) {
       textarea.style.height = `${minHeight}px`
+      textarea.style.overflowY = "hidden"
     }
   }, [minHeight])
 
@@ -56,27 +70,9 @@ function useAutoResizeTextarea({
   return { textareaRef, adjustHeight }
 }
 
-const MIN_HEIGHT = 44
-const MAX_HEIGHT = 164
+const MIN_HEIGHT = 20
+const MAX_HEIGHT = 200
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
-
-const AnimatedPlaceholder = ({ showSearch }: { showSearch: boolean }) => (
-  <AnimatePresence mode="wait">
-    <motion.p
-      key={showSearch ? "search" : "ask"}
-      initial={{ opacity: 0, y: 5 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -5 }}
-      transition={{ duration: 0.1 }}
-      className={`pointer-events-none w-[150px] text-sm absolute ${showSearch
-        ? "bg-gradient-to-r from-blue-600 via-purple-600 via-cyan-400 to-blue-600 bg-[length:200%_100%] bg-clip-text text-transparent animate-shimmer"
-        : "text-black/70 dark:text-white/70"
-        }`}
-    >
-      {showSearch ? "Search the web..." : "Ask Acadlabs AI..."}
-    </motion.p>
-  </AnimatePresence>
-)
 
 interface AiInputProps {
   value: string
@@ -115,7 +111,6 @@ export default function AiInput({
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(attachedFile ?? null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const isBorderless = variant === "borderless"
 
   // Ensure text-only mode clears any previously selected file
   useEffect(() => {
@@ -128,8 +123,8 @@ export default function AiInput({
     }
   }, [allowFiles])
 
+  const isEmpty = value.trim().length === 0 && !selectedFile
   const canSend = allowFiles ? (value.trim().length > 0 || !!selectedFile) : value.trim().length > 0
-  const compactTextOnly = isBorderless && !allowFiles && !onSearchToggle
 
   const handleClose = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -138,14 +133,14 @@ export default function AiInput({
       fileInputRef.current.value = "" // Reset file input
     }
     setSelectedFile(null)
-    setImagePreview(null) // Use null instead of empty string
+    setImagePreview(null)
     onFileSelected?.(null)
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files ? e.target.files[0] : null
     if (file && file.size > MAX_FILE_SIZE_BYTES) {
-      toast.error("Ukuran file maksimal 10MB")
+      toast.error("File size limit is 10MB")
       if (fileInputRef.current) fileInputRef.current.value = ""
       setSelectedFile(null)
       setImagePreview(null)
@@ -169,8 +164,10 @@ export default function AiInput({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      onSubmit()
-      adjustHeight(true)
+      if (!isLoading && canSend) {
+        onSubmit()
+        adjustHeight(true)
+      }
     }
   }
 
@@ -197,162 +194,152 @@ export default function AiInput({
   }, [attachedFile])
 
   return (
-    <div className={cn("w-full max-w-full overflow-hidden py-2", className)}>
-      <div
+    <div className={cn("w-full max-w-full overflow-hidden py-2 px-4", className)}>
+      <motion.div
+        layout
         className={cn(
-          "relative w-full max-w-full overflow-hidden mx-auto",
-          useSearch && "rounded-[22px] p-[1px] bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-400"
+          "relative flex items-end w-full p-2 rounded-[26px] border border-transparent transition-all shadow-sm",
+          "bg-[#f4f4f4] dark:bg-[#303030]", // Updated dark mode bg to match ChatGPT
+          "focus-within:bg-[#f4f4f4] dark:focus-within:bg-[#303030]"
         )}
       >
-        <div
-          className={cn(
-            "relative flex flex-col overflow-hidden",
-            isBorderless
-              ? "bg-black/5 dark:bg-white/5 ring-1 ring-black/10 dark:ring-white/10"
-              : "bg-gray-100 dark:bg-[#1f1f1f]",
-            useSearch ? "rounded-[25px]" : "rounded-3xl"
-          )}
-        >
-          <div
-            className="overflow-y-auto"
-            style={{ maxHeight: `${MAX_HEIGHT}px` }}
-          >
-            <div className="relative">
-              <Textarea
-                value={value}
-                placeholder=""
-                className={cn(
-                  "w-full min-w-0 px-4 py-2.5 text-black dark:text-white border-none resize-none focus-visible:ring-0 leading-[1.2]",
-                  isBorderless ? "bg-transparent" : "bg-gray-100 dark:bg-[#1f1f1f]",
-                  compactTextOnly && "pr-10"
-                )}
-                ref={textareaRef}
-                onKeyDown={handleKeyDown}
-                onChange={handleInputChange}
-                disabled={isLoading}
-              />
-              {!value && (
-                <div className="absolute left-4 top-3">
-                  <AnimatedPlaceholder showSearch={showSearch} />
-                </div>
-              )}
-              {compactTextOnly && (
-                <button
-                  type="button"
-                  onClick={() => onSubmit()}
-                  disabled={isLoading || !canSend}
-                  className={cn(
-                    "absolute right-2 bottom-2 rounded-full p-2 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5",
-                    (isLoading || !canSend) && "opacity-50 cursor-not-allowed"
-                  )}
-                  aria-label="Send message"
-                  title="Send message"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {allowFiles && imagePreview && (
-            <div className="px-3 pb-2 flex justify-start">
-              <div className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview} alt="attachment preview" className="h-16 w-16 object-cover rounded-lg" />
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className="absolute -right-2 -top-2 rounded-full p-1 bg-black/60 text-white hover:bg-black/70"
-                  title="Remove attachment"
-                  aria-label="Remove attachment"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {allowFiles && selectedFile && !imagePreview && (
-            <div className="px-3 pb-2 flex justify-start">
-              <div className="flex items-center gap-2 rounded-lg bg-black/5 dark:bg-white/5 px-3 py-2 text-sm">
-                <span className="truncate max-w-[220px]">{selectedFile.name}</span>
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className="rounded-full p-1 hover:bg-black/10 dark:hover:bg-white/10"
-                  title="Remove attachment"
-                  aria-label="Remove attachment"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {!compactTextOnly && (
-            <div
-              className={cn(
-                "h-12 flex items-center justify-between px-3",
-                isBorderless ? "bg-black/5 dark:bg-white/5" : "bg-gray-100 dark:bg-[#1f1f1f]"
-              )}
-            >
-              <div className="flex items-center gap-2">
-                {allowFiles && (
-                  <>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*,.pdf,.docx,.txt"
-                      onChange={handleChange}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className={cn(
-                        "cursor-pointer rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/5",
-                        !isBorderless && "ring-1 ring-black/10 dark:ring-white/10"
-                      )}
-                      title="Attach file"
-                    >
-                      <Paperclip className="h-4 w-4" />
-                    </button>
-                  </>
-                )}
-                {onSearchToggle && (
-                  <button
-                    type="button"
-                    onClick={onSearchToggle}
-                    className={cn(
-                      "cursor-pointer rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/5",
-                      useSearch ? "bg-black/10 dark:bg-white/10" : "bg-transparent",
-                      !isBorderless && "ring-1 ring-black/10 dark:ring-white/10"
-                    )}
-                    title="Toggle search mode"
-                  >
-                    <Search className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+        {/* Left Actions: Plus Menu */}
+        <div className="flex gap-2 items-center pb-2 pl-1 relative z-10">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                onClick={() => onSubmit()}
-                disabled={isLoading || !canSend}
                 className={cn(
-                  "cursor-pointer rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/5",
-                  !isBorderless && "ring-1 ring-black/10 dark:ring-white/10",
-                  isLoading || !canSend
-                    ? "opacity-50 cursor-not-allowed"
-                    : ""
+                  "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5",
+                  (useSearch || selectedFile) && "text-zinc-800 dark:text-zinc-200"
                 )}
-                title="Send message"
+                title="Add attachment or search"
               >
-                <Send className="h-4 w-4" />
+                <Plus className="h-5 w-5 stroke-[2.5]" />
               </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 rounded-xl" sideOffset={8}>
+              {allowFiles && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.pdf,.docx,.txt"
+                    onChange={handleChange}
+                    className="hidden"
+                  />
+                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="cursor-pointer py-2.5">
+                    <ImageIcon className="mr-2 h-4 w-4" />
+                    <span>Upload Image</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="cursor-pointer py-2.5">
+                    <FileText className="mr-2 h-4 w-4" />
+                    <span>Upload File</span>
+                  </DropdownMenuItem>
+                </>
+              )}
+              {onSearchToggle && (
+                <DropdownMenuItem onClick={onSearchToggle} className="cursor-pointer py-2.5">
+                  <Globe className="mr-2 h-4 w-4" />
+                  <span>{useSearch ? "Disable Search" : "Search Web"}</span>
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Textarea Container */}
+        <div className="flex-1 min-w-0 relative flex flex-col pl-1">
+          {/* File Previews (Inside Capsule) */}
+          {allowFiles && (
+            <div className="px-2 pt-2 empty:hidden">
+              {imagePreview && (
+                <div className="relative group inline-block mb-3">
+                  <img src={imagePreview} alt="preview" className="h-16 w-16 object-cover rounded-xl border border-black/10 dark:border-white/10 shadow-sm" />
+                  <button
+                    onClick={handleClose}
+                    className="absolute -top-1.5 -right-1.5 bg-zinc-800 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {selectedFile && !imagePreview && (
+                <div className="relative inline-flex items-center gap-2 bg-white dark:bg-zinc-800 border border-black/5 dark:border-white/5 rounded-lg px-3 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-200 mb-3 shadow-sm">
+                  <span className="truncate max-w-[150px]">{selectedFile.name}</span>
+                  <button onClick={handleClose} className="text-zinc-400 hover:text-zinc-600">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
+
+          <div className="relative flex flex-col">
+            {/* Search Mode Indicator */}
+            <AnimatePresence>
+              {useSearch && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                  animate={{ opacity: 1, height: "auto", marginBottom: 4 }}
+                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                  className="flex items-center gap-1.5 overflow-hidden origin-top pl-1"
+                >
+                  <span className="flex items-center gap-1 text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full text-xs font-medium">
+                    <Globe className="h-3 w-3" />
+                    Mencari di web
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="relative">
+              <Textarea
+                ref={textareaRef}
+                value={value}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                disabled={isLoading}
+                placeholder={useSearch ? "Telusuri web..." : "Tanyakan apa saja..."}
+                className="w-full min-h-[44px] !bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none resize-none py-3 px-1 text-[16px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 leading-relaxed custom-scrollbar"
+                style={{ maxHeight: `${MAX_HEIGHT}px` }}
+              />
+            </div>
+          </div>
         </div>
-      </div>
+
+        {/* Right Actions: Mic & Send */}
+        <div className="flex items-center gap-2 pb-2 pr-2">
+          {/* Microphone Placeholder */}
+          <button
+            type="button"
+            className="text-zinc-900 dark:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 p-2 rounded-full transition-colors hidden sm:flex"
+            title="Voice Input (Coming Soon)"
+          >
+            <Mic className="h-5 w-5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => canSend ? onSubmit() : null}
+            className={cn(
+              "h-10 w-10 rounded-full flex items-center justify-center transition-all duration-200",
+              // ChatGPT Style: White circle with black icon when active/empty (Visual match)
+              canSend || isLoading
+                ? "bg-black text-white dark:bg-white dark:text-black shadow-md hover:opacity-90"
+                : "bg-zinc-200 text-zinc-400 dark:bg-zinc-700 dark:text-zinc-500 cursor-not-allowed",
+              isLoading && "opacity-70 cursor-not-allowed"
+            )}
+            disabled={isLoading || (!canSend && !isLoading)}
+          >
+            {isLoading ? (
+              <div className="h-4 w-4 border-2 border-current border-solid border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <ArrowUp className="h-5 w-5 stroke-[2.5]" />
+            )}
+          </button>
+        </div>
+      </motion.div>
     </div>
   )
 }

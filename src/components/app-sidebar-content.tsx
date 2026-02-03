@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "./ui/button";
 import { Plus, MoreVertical, Pencil, Trash2, Code, Calculator, TrendingUp } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
 import { motion } from "framer-motion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
@@ -169,11 +170,13 @@ export default function AppSidebarContent() {
             className="group relative"
           >
             <Button
+              asChild
               variant={pathname === `/chat/${chat.id}` ? "secondary" : "ghost"}
               className="w-full justify-start truncate text-left rounded-lg py-2 pr-12 text-sm"
-              onClick={() => router.push(`/chat/${chat.id}`)}
             >
-              {chat.title && chat.title.trim().length > 0 ? chat.title : "Untitled Chat"}
+              <Link href={`/chat/${chat.id}`}>
+                {chat.title && chat.title.trim().length > 0 ? chat.title : "Untitled Chat"}
+              </Link>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -257,28 +260,34 @@ export default function AppSidebarContent() {
           <div className="mb-1 text-xs font-medium text-muted-foreground ml-3 mt-3">Menu</div>
           <div className="space-y-1 mb-4">
             <Button
+              asChild
               variant={pathname === "/math" ? "secondary" : "ghost"}
               className="w-full justify-start gap-2 text-left rounded-lg py-2 text-sm"
-              onClick={() => router.push("/math")}
             >
-              <Calculator className="h-4 w-4" />
-              Math Solver
+              <Link href="/math">
+                <Calculator className="h-4 w-4" />
+                Math Solver
+              </Link>
             </Button>
             <Button
+              asChild
               variant={pathname === "/editor" ? "secondary" : "ghost"}
               className="w-full justify-start gap-2 text-left rounded-lg py-2 text-sm"
-              onClick={() => router.push("/editor")}
             >
-              <Code className="h-4 w-4" />
-              Reason Code
+              <Link href="/editor">
+                <Code className="h-4 w-4" />
+                Reason Code
+              </Link>
             </Button>
             <Button
+              asChild
               variant={pathname === "/market" ? "secondary" : "ghost"}
               className="w-full justify-start gap-2 text-left rounded-lg py-2 text-sm"
-              onClick={() => router.push("/market")}
             >
-              <TrendingUp className="h-4 w-4" />
-              Market Analysis
+              <Link href="/market">
+                <TrendingUp className="h-4 w-4" />
+                Market Analysis
+              </Link>
             </Button>
           </div>
 

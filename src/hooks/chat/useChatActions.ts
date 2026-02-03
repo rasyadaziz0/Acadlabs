@@ -271,7 +271,72 @@ export function useChatActions(
     };
 
     const handleResendFromMessage = async (msg: Message) => {
-        // Implementation for resend
+        if (isLoading || isStreaming) return;
+
+        // 1. Find the index of the edited message
+        const msgIndex = messages.findIndex((m) => m.id === msg.id);
+        if (msgIndex === -1) return;
+
+        // 2. Truncate history: Keep everything up to (and including) the edited message
+        // The edited message itself is passed in `msg` (which presumably has the new content)
+        // But we need to ensure the state reflects this.
+        const newHistory = messages.slice(0, msgIndex);
+
+        // Update the state to remove all subsequent messages
+        // And ensure the current message is the updated one
+        const updatedHistory = [...newHistory, msg];
+        setMessages(updatedHistory);
+
+        setIsLoading(true);
+        setIsStreaming(true);
+
+        // 3. Prepare placeholder for new AI response
+        const streamMessageId = crypto.randomUUID();
+        const assistantPlaceholder: Message = {
+            id: streamMessageId,
+            role: "assistant",
+            content: "",
+            chat_id: chatId!,
+            user_id: msg.user_id,
+            created_at: new Date().toISOString(),
+        };
+
+        setMessages((prev) => [...prev, assistantPlaceholder]);
+        setStreamingAssistantId(streamMessageId);
+
+        try {
+            // 4. Call API
+            // Note: We don't re-run search/file-upload here for simplicity unless we want to intricate logic.
+            // Assuming the edited content is all we need.
+            const response = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+                body: JSON.stringify({
+                    messages: updatedHistory, // Send the truncated history including the edited msg
+                    searchResults: [], // Optional: Could re-trigger search if needed, but keeping it simple for now
+                    chatId: chatId
+                })
+            });
+
+            if (!response.ok) {
+                const errorJson = await response.json();
+                throw new Error(errorJson.error || "API Failure");
+            }
+
+            if (!response.body) throw new Error("No response body");
+
+            const reader = response.body.getReader();
+            await processReader(reader, streamMessageId);
+
+        } catch (e: any) {
+            console.error(e);
+            toast.error("Gagal mengirim ulang: " + e.message);
+            setMessages(prev => prev.filter(m => m.id !== streamMessageId));
+        } finally {
+            setIsLoading(false);
+            setIsStreaming(false);
+            setStreamingAssistantId(null);
+        }
     };
 
     return {
