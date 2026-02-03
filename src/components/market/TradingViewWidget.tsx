@@ -29,7 +29,7 @@ const TradingViewWidget = ({ symbol }: TradingViewWidgetProps) => {
         // Map "BBCA.JK" -> "IDX:BBCA"
         if (s.endsWith(".JK")) {
             const stock = s.replace(".JK", "");
-            return `IDX:${stock}`;
+            return `${stock}`;
         }
 
         // 4. Default / US Stocks

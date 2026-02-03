@@ -44,7 +44,6 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
         useSearch,
         setUseSearch,
         searchResults,
-        streamingContainerRef,
         handleMessageUpdated,
         handleResendFromMessage
     } = useChatActions(
@@ -76,8 +75,6 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
                             />
                         ))
                     )}
-
-                    <div ref={streamingContainerRef} className="prose dark:prose-invert w-full max-w-[72ch] min-w-0 break-words text-[15px] sm:text-[16px] leading-relaxed whitespace-pre-wrap" />
 
                     {isStreaming && (
                         <span className="ml-0.5 inline-block align-[-0.15em] w-[8px] h-[1em] bg-current/70 rounded-sm animate-pulse" />

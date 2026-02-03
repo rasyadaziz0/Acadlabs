@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 import { sanitizeUserText, sanitizeAIText, normalizeWhitespaceKeepEdges } from "@/lib/sanitize";
+import { generateTitleWithGroq } from "@/lib/title";
 import {
   ChatRole,
   ChatMessage,
@@ -26,7 +27,7 @@ function isChatMessage(val: unknown): val is ChatMessage {
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages, searchResults } = (await request.json()) as Record<string, unknown>;
+    const { messages, searchResults, chatId } = (await request.json()) as Record<string, unknown>;
 
     // Init Supabase & Get User Context
     const supabase = createServerClient(
@@ -76,7 +77,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Format and sanitize messages for Groq API
+    // Generate title for new chats (Fire & Forget)
+    if (chatId && typeof chatId === "string" && incoming.length === 1 && incoming[0].role === "user") {
+      const firstUserContent = incoming[0].content;
+      (async () => {
+        try {
+          const generatedTitle = await generateTitleWithGroq(firstUserContent);
+          if (generatedTitle) {
+            await supabase
+              .from("chats")
+              .update({ title: generatedTitle })
+              .eq("id", chatId);
+          }
+        } catch (err) {
+          console.error("Failed to generate/update title:", err);
+        }
+      })();
+    }
+
     // Only sanitize USER messages to preserve AI math/entities and avoid double-escaping.
+
     const formattedMessages: ChatMessage[] = incoming.map((msg) => {
       const raw = msg.content;
       if (msg.role === "user") {

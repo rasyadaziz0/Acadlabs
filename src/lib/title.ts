@@ -1,4 +1,8 @@
 import { normalizeWhitespace } from "./sanitize";
+import Groq from "groq-sdk";
+import { getGroqKeys } from "./ai-service";
+
+// ... existing regex helpers ...
 
 function removeLeadingPhrases(s: string): string {
   let out = s.trim();
@@ -32,7 +36,7 @@ function pickFirstClause(s: string): string {
 
 function titleCaseSmart(input: string): string {
   const lowers = new Set([
-    "dan","atau","yang","di","ke","dari","pada","untuk","dengan","dalam","serta","atau","ke" 
+    "dan", "atau", "yang", "di", "ke", "dari", "pada", "untuk", "dengan", "dalam", "serta", "atau", "ke"
   ]);
   return input
     .split(/\s+/)
@@ -66,4 +70,40 @@ export function generateChatTitleFromUserInput(text: string): string {
   if (!s) return "Untitled Chat";
   const cased = titleCaseSmart(s);
   return trimLength(cased, 40);
+}
+
+export async function generateTitleWithGroq(content: string): Promise<string | null> {
+  const keys = getGroqKeys();
+  if (!keys.length) return null;
+
+  // Simple rotation or pick first. SDK expects one key.
+  // We'll try the first one.
+  const apiKey = keys[0];
+  const groq = new Groq({ apiKey });
+
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant. Generate a very short, concise title (max 4 words) for the following user message. Do not use quotes. Return ONLY the title."
+        },
+        {
+          role: "user",
+          content: content
+        }
+      ],
+      model: process.env.GROQ_MODEL || "mixtral-8x7b-32768",
+      temperature: 0.5,
+      max_tokens: 20,
+    });
+
+    const title = completion.choices[0]?.message?.content?.trim();
+    if (title) {
+      return title.replace(/^["']|["']$/g, ''); // remove extra quotes if any
+    }
+  } catch (error) {
+    console.error("Error generating title with Groq:", error);
+  }
+  return null;
 }
