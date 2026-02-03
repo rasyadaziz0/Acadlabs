@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzeMarketDataWithGroq } from "@/lib/groq";
-import yahooFinance from "yahoo-finance2"; // Correct Default Import
+import YahooFinance from "yahoo-finance2"; // v3 requires instantiation
 import { getCryptoData, CoinGeckoData } from "@/lib/coingecko";
 
 export const runtime = "nodejs";
@@ -59,9 +59,14 @@ export async function POST(req: Request) {
                 // Standard Yahoo logic: needs "-USD"
                 // Jika input "BTC", ubah jadi "BTC-USD"
                 // Jika input "BTC-USD", biarkan.
-                if (!yahooSymbol.includes("-")) {
-                    yahooSymbol = `${yahooSymbol}-USD`;
-                }
+                // Clean symbol for Yahoo: Remove USDT/USD suffix first to get base content
+                // Example: "BTCUSDT" -> "BTC", "BTCUSD" -> "BTC", "BTC" -> "BTC"
+                let cleanSymbol = yahooSymbol.replace(/USDT?$/, "");
+
+                // Then append -USD standard
+                yahooSymbol = `${cleanSymbol}-USD`;
+
+                console.log(`[API] Yahoo Symbol Transformed: ${symbol} -> ${yahooSymbol}`);
                 break;
             case "FOREX":
                 if (["XAU", "GOLD", "XAUUSD"].includes(yahooSymbol)) yahooSymbol = "GC=F";
@@ -74,7 +79,8 @@ export async function POST(req: Request) {
             const startDate = new Date();
             startDate.setDate(endDate.getDate() - 30);
 
-            // Fetch using default instance (no 'new')
+            // Fetch using v3 instance
+            const yahooFinance = new YahooFinance();
             const yahooResult: any[] = await yahooFinance.historical(yahooSymbol, {
                 period1: startDate,
                 period2: endDate,
