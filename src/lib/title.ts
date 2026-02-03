@@ -2,7 +2,9 @@ import { normalizeWhitespace } from "./sanitize";
 import Groq from "groq-sdk";
 import { getGroqKeys } from "./ai-service";
 
-// ... existing regex helpers ...
+/* -------------------------------------------------------------------------- */
+/*                               Helper Regex                                 */
+/* -------------------------------------------------------------------------- */
 
 function removeLeadingPhrases(s: string): string {
   let out = s.trim();
@@ -42,7 +44,7 @@ function titleCaseSmart(input: string): string {
     .split(/\s+/)
     .filter(Boolean)
     .map((w, i) => {
-      if (/[^A-Za-z\u00C0-\u024F\u1E00-\u1EFF]/.test(w)) return w; // keep math/special tokens
+      if (/[^A-Za-z\u00C0-\u024F\u1E00-\u1EFF]/.test(w)) return w;
       const lower = w.toLowerCase();
       if (i > 0 && lowers.has(lower)) return lower;
       return lower.charAt(0).toUpperCase() + lower.slice(1);
@@ -58,6 +60,10 @@ function trimLength(s: string, max = 40): string {
   return cut.trim().replace(/[\s,:;\-]+$/g, "") + "…";
 }
 
+/* -------------------------------------------------------------------------- */
+/*                          Legacy Fallback Logic                             */
+/* -------------------------------------------------------------------------- */
+
 export function generateChatTitleFromUserInput(text: string): string {
   let s = normalizeWhitespace(String(text ?? ""));
   s = s.replace(/^#+\s*/, "");
@@ -72,12 +78,15 @@ export function generateChatTitleFromUserInput(text: string): string {
   return trimLength(cased, 40);
 }
 
-export async function generateTitleWithGroq(content: string): Promise<string | null> {
+/* -------------------------------------------------------------------------- */
+/*                          AI Title Generation                               */
+/* -------------------------------------------------------------------------- */
+
+export async function generateChatTitle(content: string): Promise<string | null> {
   const keys = getGroqKeys();
   if (!keys.length) return null;
 
-  // Simple rotation or pick first. SDK expects one key.
-  // We'll try the first one.
+  // Utilize the first available key
   const apiKey = keys[0];
   const groq = new Groq({ apiKey });
 
@@ -86,21 +95,21 @@ export async function generateTitleWithGroq(content: string): Promise<string | n
       messages: [
         {
           role: "system",
-          content: "You are a helpful assistant. Generate a very short, concise title (2-3 words) for the following user message. Do not use quotes. Return ONLY the title."
+          content: "Generate a chat title in 2-3 words based on the user's message. Output ONLY the title, no quotes."
         },
         {
           role: "user",
           content: content
         }
       ],
-      model: "llama3-8b-8192", // Fast/Cheap model for titles
+      model: "llama3-8b-8192",
       temperature: 0.5,
-      max_tokens: 20,
+      max_tokens: 15,
     });
 
     const title = completion.choices[0]?.message?.content?.trim();
     if (title) {
-      return title.replace(/^["']|["']$/g, ''); // remove extra quotes if any
+      return title.replace(/^["']|["']$/g, '');
     }
   } catch (error) {
     console.error("Error generating title with Groq:", error);
