@@ -49,66 +49,86 @@ export async function POST(req: Request) {
             }
         }
 
-        // === 2. YAHOO FINANCE STRATEGY (Fallback & Stocks) ===
-        // Yahoo always needs specific format, but we start with raw
+        // === 2. YAHOO FINANCE STRATEGY (Smart Stock & Fallback) ===
+        const yahooFinance = new YahooFinance();
+
+        // Helper function safely fetch Yahoo
+        const fetchYahoo = async (sym: string) => {
+            try {
+                const endDate = new Date();
+                const startDate = new Date();
+                startDate.setDate(endDate.getDate() - 30);
+
+                return await yahooFinance.historical(sym, {
+                    period1: startDate,
+                    period2: endDate,
+                    interval: "1d",
+                });
+            } catch (e) {
+                return [];
+            }
+        };
+
         let yahooSymbol = symbol.toUpperCase().trim();
+        let yahooResult: any[] = [];
 
-        // Yahoo Symbol Mapping Logic
         switch (type) {
-            case "CRYPTO":
-                // Standard Yahoo logic: needs "-USD"
-                // Jika input "BTC", ubah jadi "BTC-USD"
-                // Jika input "BTC-USD", biarkan.
-                // Clean symbol for Yahoo: Remove USDT/USD suffix first to get base content
-                // Example: "BTCUSDT" -> "BTC", "BTCUSD" -> "BTC", "BTC" -> "BTC"
-                let cleanSymbol = yahooSymbol.replace(/USDT?$/, "");
+            case "STOCK":
+                // 1. Try Adding .JK (Assumption: Indonesian User)
+                if (!yahooSymbol.includes(".")) {
+                    const tryIndo = `${yahooSymbol}.JK`;
+                    const resIndo = await fetchYahoo(tryIndo);
 
-                // Then append -USD standard
-                yahooSymbol = `${cleanSymbol}-USD`;
-
-                console.log(`[API] Yahoo Symbol Transformed: ${symbol} -> ${yahooSymbol}`);
+                    if (resIndo.length > 0) {
+                        yahooSymbol = tryIndo;
+                        yahooResult = resIndo;
+                    } else {
+                        // Fallback to US/Raw
+                        yahooResult = await fetchYahoo(yahooSymbol);
+                    }
+                } else {
+                    // Trust user input
+                    yahooResult = await fetchYahoo(yahooSymbol);
+                }
                 break;
+
+            case "CRYPTO":
+                // Logic Crypto di Yahoo (Fallback kalau CoinGecko mati)
+                let cleanSymbol = yahooSymbol.replace(/USDT?$/, "");
+                if (!cleanSymbol.includes("-")) cleanSymbol = `${cleanSymbol}-USD`;
+                yahooSymbol = cleanSymbol;
+
+                yahooResult = await fetchYahoo(yahooSymbol);
+                break;
+
             case "FOREX":
                 if (["XAU", "GOLD", "XAUUSD"].includes(yahooSymbol)) yahooSymbol = "GC=F";
                 else if (!yahooSymbol.endsWith("=X")) yahooSymbol += "=X";
+                yahooResult = await fetchYahoo(yahooSymbol);
+                break;
+
+            default:
+                yahooResult = await fetchYahoo(yahooSymbol);
                 break;
         }
 
-        try {
-            const endDate = new Date();
-            const startDate = new Date();
-            startDate.setDate(endDate.getDate() - 30);
+        if (yahooResult && yahooResult.length > 0) {
+            // Populate Mobile Chart Data
+            mobileChartData = yahooResult.map((item: any) => ({
+                time: item.date.toISOString().split("T")[0],
+                open: item.open,
+                high: item.high,
+                low: item.low,
+                close: item.close,
+            }));
 
-            // Fetch using v3 instance
-            const yahooFinance = new YahooFinance();
-            const yahooResult: any[] = await yahooFinance.historical(yahooSymbol, {
-                period1: startDate,
-                period2: endDate,
-                interval: "1d",
-            });
-
-            if (yahooResult && yahooResult.length > 0) {
-                // Populate Mobile Chart Data
-                mobileChartData = yahooResult.map((item: any) => ({
-                    time: item.date.toISOString().split("T")[0],
-                    open: item.open,
-                    high: item.high,
-                    low: item.low,
-                    close: item.close,
-                }));
-
-                // Fallback for AI if CoinGecko failed (or if Stock/Forex)
-                if (!aiContextData) {
-                    sourceUsed = "YAHOO_FALLBACK";
-                    // create a copy before reversing to avoid mutating the original array
-                    aiContextData = [...yahooResult].reverse().slice(0, 14).map((d: any) => {
-                        const dateStr = d.date.toISOString().split("T")[0];
-                        return `- ${dateStr}: Open = ${d.open}, High = ${d.high}, Low = ${d.low}, Close = ${d.close} `;
-                    }).join("\n");
-                }
+            // Fallback for AI if CoinGecko failed (or if Stock/Forex)
+            if (!aiContextData) {
+                aiContextData = [...yahooResult].reverse().slice(0, 14).map((d: any) => {
+                    const dateStr = d.date.toISOString().split("T")[0];
+                    return `- ${dateStr}: Open = ${d.open}, High = ${d.high}, Low = ${d.low}, Close = ${d.close} `;
+                }).join("\n");
             }
-        } catch (yahooError) {
-            console.error("Yahoo Finance Error:", yahooError);
         }
 
         // === 3. FINAL RESPONSE ===
@@ -124,6 +144,7 @@ export async function POST(req: Request) {
 
         return NextResponse.json({
             symbol: symbol,
+            yahooSymbol: yahooSymbol,
             source: sourceUsed,
             result: analysis,
             data: mobileChartData
