@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { Message } from "@/components/chat/ChatMessage";
 import { createBrowserClient } from "@supabase/ssr";
 import { toast } from "sonner";
@@ -269,6 +269,13 @@ export function useChatActions(
             setSearchResults([]);
         }
     };
+
+    // Double-lock cleanup: Force clear search results when idle
+    useEffect(() => {
+        if (!isLoading && !isStreaming && searchResults.length > 0) {
+            setSearchResults([]);
+        }
+    }, [isLoading, isStreaming, searchResults.length]);
 
     const handleStop = () => {
         setIsStreaming(false);

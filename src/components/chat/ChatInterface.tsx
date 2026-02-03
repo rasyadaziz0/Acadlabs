@@ -90,7 +90,9 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
                 className="fixed bottom-0 z-20 w-full bg-gradient-to-t from-background via-background/90 to-transparent pt-6 pb-2 px-4 md:left-64 md:w-[calc(100%-16rem)]"
             >
                 <div className="max-w-3xl mx-auto space-y-4">
-                    <SearchResults results={searchResults} isSearching={isSearching} />
+                    {(isLoading || isStreaming || isSearching) && (
+                        <SearchResults results={searchResults} isSearching={isSearching} />
+                    )}
                     <AiInput
                         value={input}
                         onChange={setInput}
