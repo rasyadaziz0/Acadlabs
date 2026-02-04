@@ -37,7 +37,11 @@ function useAutoResizeTextarea({
         return
       }
 
-      textarea.style.height = `${minHeight}px`
+      // 1. Save current scroll position
+      const currentScrollTop = textarea.scrollTop
+
+      // 2. Reset height to auto to correctly calculate scrollHeight (shrink if needed)
+      textarea.style.height = "auto"
 
       const scrollHeight = textarea.scrollHeight
       const isScrollable = scrollHeight > (maxHeight ?? Number.POSITIVE_INFINITY)
@@ -47,19 +51,22 @@ function useAutoResizeTextarea({
         Math.min(scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY)
       )
 
+      // 3. Apply new height and overflow style
       textarea.style.height = `${newHeight}px`
       textarea.style.overflowY = isScrollable ? "auto" : "hidden"
+
+      // 4. Restore scroll position if scrollable, to prevent "jumping"
+      if (isScrollable) {
+        textarea.scrollTop = currentScrollTop
+      }
     },
     [minHeight, maxHeight]
   )
 
   useEffect(() => {
-    const textarea = textareaRef.current
-    if (textarea) {
-      textarea.style.height = `${minHeight}px`
-      textarea.style.overflowY = "hidden"
-    }
-  }, [minHeight])
+    // Initial adjustment
+    adjustHeight()
+  }, [adjustHeight])
 
   useEffect(() => {
     const handleResize = () => adjustHeight()
@@ -166,7 +173,8 @@ export default function AiInput({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChange(e.target.value)
-    adjustHeight()
+    // Defer adjustment slightly to ensure value update paints first, usually works better for React state updates
+    requestAnimationFrame(() => adjustHeight())
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
