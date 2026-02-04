@@ -10,9 +10,8 @@ import rehypeKatex from "rehype-katex";
 import { decodeHtmlEntities } from "./math-utils";
 
 type Props = {
-  solution: string | null | undefined; // final answer only (non-streaming)
+  solution: string | null | undefined;
   className?: string;
-  // Legacy optional props for compatibility (ignored by this component)
   isStreaming?: boolean;
   previewHtml?: string;
   previewDisabledReason?: string;
@@ -25,11 +24,10 @@ type Props = {
   fullDownloadUrl?: string;
 };
 
-// Constants
-export const UI_MAX_CHARS_RENDER = 20_000; // consistency with historical cap (not used directly)
+export const UI_MAX_CHARS_RENDER = 20_000;
 export const MAX_KATEX_INPUT = 10_000;
 export const HARD_TRUNCATE_SUFFIX = "\n...[truncated]";
-export const MAX_FULL_RENDER_CHARS = 200_000; // if exceeded: don't KaTeX-render; offer download instead
+export const MAX_FULL_RENDER_CHARS = 200_000;
 
 function escapeHtml(s: string): string {
   return (s || "")
@@ -133,7 +131,7 @@ export default function SolverOutput({ solution, className, renderedHtml }: Prop
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-      } catch {}
+      } catch { }
     };
     return (
       <div className={`p-4 border border-border rounded bg-card text-card-foreground overflow-auto ${className || ""}`}>
@@ -155,8 +153,6 @@ export default function SolverOutput({ solution, className, renderedHtml }: Prop
   const { error, shown, wasTruncated } = useMemo(() => {
     try {
       if (!raw) return { error: "", shown: "", wasTruncated: false };
-      // No pre-render string building; we will render Markdown below.
-      // We only compute flags for UI (download button visibility) and safe preview text for error case.
       const truncated = raw.length > MAX_KATEX_INPUT;
       const shown = raw.slice(0, MAX_KATEX_INPUT) + (truncated ? HARD_TRUNCATE_SUFFIX : "");
       return { error: "", shown, wasTruncated: truncated };
@@ -187,7 +183,7 @@ export default function SolverOutput({ solution, className, renderedHtml }: Prop
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch {}
+    } catch { }
   };
 
   return (

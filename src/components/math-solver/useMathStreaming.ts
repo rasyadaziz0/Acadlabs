@@ -4,20 +4,20 @@ import { useEffect, useRef, useState } from "react";
 
 export interface StreamCallbacks {
   onOpen?: () => void;
-  onChunk?: (chunk: string) => void; // optional per-chunk observer (do NOT set React state here)
-  onFlush?: (text: string) => void; // called every flush with accumulated text
+  onChunk?: (chunk: string) => void;
+  onFlush?: (text: string) => void;
   onClose?: () => void;
   onError?: (err: unknown) => void;
 }
 
 export interface StreamOptions extends StreamCallbacks {
-  url?: string; // default "/api/math"
+  url?: string;
   method?: "GET" | "POST";
   headers?: Record<string, string>;
   body?: BodyInit | null;
-  flushIntervalMs?: number; // default 150ms
-  maxTotalChars?: number;   // default 120000
-  autoAbortMs?: number;     // default 45000
+  flushIntervalMs?: number;
+  maxTotalChars?: number;
+  autoAbortMs?: number;
   debug?: boolean;
 }
 
@@ -65,9 +65,9 @@ export function useMathStreaming() {
   };
 
   const stop = () => {
-    try { readerRef.current?.cancel(); } catch {}
+    try { readerRef.current?.cancel(); } catch { }
     readerRef.current = null;
-    try { abortRef.current?.abort(); } catch {}
+    try { abortRef.current?.abort(); } catch { }
     abortRef.current = null;
     clearTimers();
     setIsStreaming(false);
@@ -132,7 +132,7 @@ export function useMathStreaming() {
     // auto-abort overall
     autoAbortTimeoutIdRef.current = window.setTimeout(() => {
       log("autoAbortMs reached; aborting stream");
-      try { ac.abort(); } catch {}
+      try { ac.abort(); } catch { }
     }, optsRef.current.autoAbortMs);
 
     // periodic flush
@@ -175,15 +175,15 @@ export function useMathStreaming() {
                   typeof choice?.delta?.content === "string"
                     ? choice.delta.content
                     : typeof choice?.text === "string"
-                    ? choice.text
-                    : "";
+                      ? choice.text
+                      : "";
                 if (token) {
                   optsRef.current.onChunk?.(token);
                   pendingRef.current += token;
                   totalCharsRef.current += token.length;
                   if (totalCharsRef.current >= optsRef.current.maxTotalChars) {
                     log("maxTotalChars reached; aborting stream");
-                    try { ac.abort(); } catch {}
+                    try { ac.abort(); } catch { }
                     sawDone = true;
                     break;
                   }
@@ -205,10 +205,10 @@ export function useMathStreaming() {
       optsRef.current.onError?.(err);
       throw err; // let caller know for UI toast if desired
     } finally {
-      try { flushBuffer(); } catch {}
-      try { readerRef.current?.cancel(); } catch {}
+      try { flushBuffer(); } catch { }
+      try { readerRef.current?.cancel(); } catch { }
       readerRef.current = null;
-      try { abortRef.current?.abort(); } catch {}
+      try { abortRef.current?.abort(); } catch { }
       abortRef.current = null;
       clearTimers();
       setIsStreaming(false);

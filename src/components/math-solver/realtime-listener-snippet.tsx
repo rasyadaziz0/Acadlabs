@@ -1,32 +1,23 @@
 "use client";
 
-// Reference-only snippet to implement a safe, deduped Supabase Realtime listener.
-// Not imported anywhere by default. Use this as a template if you need Realtime on math pages.
-
 import { useEffect, useRef } from "react";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 
 export type RTMessageRow = {
   id: string;
   chat_id?: string | null;
-  user_id?: string | null; // owner of the chat/thread
-  sender_id?: string | null; // who created this row (used to filter self)
+  user_id?: string | null;
+  sender_id?: string | null;
   content?: string | null;
   created_at?: string | null;
 };
 
-/**
- * Subscribes to INSERT-only events on a table with dedupe and self-filtering.
- * - Filters out events created by the current user (sender_id === currentUserId)
- * - Dedupe by row.id using a Set
- * - Ensures only one subscription and removes the channel on cleanup
- */
 export function useSafeRealtimeChannel(
   params: {
-    channelName: string; // e.g., `realtime:messages:<chatId>`
-    schema?: string; // default 'public'
-    table: string; // e.g., 'messages'
-    filter?: string; // e.g., `chat_id=eq.<id>`
+    channelName: string;
+    schema?: string;
+    table: string;
+    filter?: string;
     currentUserId: string | null | undefined;
     onInsert: (row: RTMessageRow) => void;
   }
@@ -38,9 +29,8 @@ export function useSafeRealtimeChannel(
 
   useEffect(() => {
     if (!currentUserId) return;
-    // Ensure previous channel is removed before creating a new one
     if (channelRef.current) {
-      try { supabase.removeChannel(channelRef.current); } catch {}
+      try { supabase.removeChannel(channelRef.current); } catch { }
       channelRef.current = null;
     }
 
@@ -52,9 +42,7 @@ export function useSafeRealtimeChannel(
         (payload) => {
           const row = payload.new as RTMessageRow;
           if (!row) return;
-          // Filter out self
           if (row.sender_id && currentUserId && row.sender_id === currentUserId) return;
-          // Dedupe by id
           if (row.id && seenRef.current.has(row.id)) return;
           if (row.id) seenRef.current.add(row.id);
           onInsert(row);
@@ -66,10 +54,9 @@ export function useSafeRealtimeChannel(
 
     return () => {
       if (channelRef.current) {
-        try { supabase.removeChannel(channelRef.current); } catch {}
+        try { supabase.removeChannel(channelRef.current); } catch { }
         channelRef.current = null;
       }
-      // Periodically trim the seen set if needed (optional)
       if (seenRef.current.size > 10000) {
         seenRef.current = new Set(Array.from(seenRef.current).slice(-5000));
       }

@@ -40,7 +40,6 @@ export default function SolverForm(props: Props) {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
     onFileChange(f);
-    // reset input so same file can be re-picked
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 

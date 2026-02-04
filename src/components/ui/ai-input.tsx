@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { Textarea } from "@/components/ui/textarea"
+import { useAudioRecorder } from "@/hooks/use-audio-recorder"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -109,10 +110,19 @@ export default function AiInput({
     maxHeight: MAX_HEIGHT,
   })
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+
   const [selectedFile, setSelectedFile] = useState<File | null>(attachedFile ?? null)
-  const [isRecording, setIsRecording] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+
+
+  const { isRecording, isTranscribing, toggleRecording } = useAudioRecorder({
+    onTranscriptionComplete: (text) => {
+      const newText = value ? `${value} ${text}` : text;
+      onChange(newText);
+      setTimeout(() => adjustHeight(), 0);
+    }
+  });
 
   // Ensure text-only mode clears any previously selected file
   useEffect(() => {
@@ -195,67 +205,7 @@ export default function AiInput({
     }
   }, [attachedFile])
 
-  const handleMicClick = async () => {
-    if (isRecording) {
-      mediaRecorderRef.current?.stop();
-      setIsRecording(false);
-    } else {
-      await startRecording();
-    }
-  };
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      const chunks: Blob[] = [];
-
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'audio/m4a' });
-        const file = new File([blob], 'recording.m4a', { type: 'audio/m4a' });
-        await uploadAudio(file);
-        stream.getTracks().forEach(track => track.stop()); // Stop mic stream
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      toast.info("Listening...");
-    } catch (error) {
-      console.error("Error accessing microphone:", error);
-      toast.error("Could not access microphone.");
-    }
-  };
-
-  const uploadAudio = async (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const toastId = toast.loading("Transcribing...");
-
-    try {
-      const res = await fetch("/api/speech-to-text", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-
-      if (data.text) {
-        // Append text logic
-        const newText = value ? `${value} ${data.text}` : data.text;
-        onChange(newText);
-        // Force resize after content update
-        // We need to wait a tick for the value to propagate to the DOM
-        setTimeout(() => adjustHeight(), 0);
-        toast.success("Transcribed!", { id: toastId });
-      } else {
-        toast.dismiss(toastId);
-      }
-    } catch (err) {
-      toast.error("Failed to transcribe", { id: toastId });
-    }
-  };
 
   return (
     <div className={cn("w-full max-w-full overflow-hidden py-2 px-4", className)}>
@@ -377,16 +327,20 @@ export default function AiInput({
           {/* Microphone Placeholder */}
           <button
             type="button"
-            onClick={handleMicClick}
+            onClick={toggleRecording}
+            disabled={isTranscribing}
             className={cn(
               "p-2 rounded-full transition-all duration-200 hidden sm:flex items-center justify-center",
               isRecording
                 ? "bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
-                : "text-zinc-900 dark:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                : "text-zinc-900 dark:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700",
+              isTranscribing && "opacity-50 cursor-not-allowed"
             )}
             title={isRecording ? "Stop Recording" : "Voice Input"}
           >
-            {isRecording ? (
+            {isTranscribing ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : isRecording ? (
               <StopCircle className="h-5 w-5 animate-pulse" />
             ) : (
               <Mic className="h-5 w-5" />
