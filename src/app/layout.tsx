@@ -5,7 +5,6 @@ import "katex/dist/katex.min.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SupabaseProvider } from "@/components/supabase-provider";
-import AuthLinksClient from "@/components/auth-links-client";
 import SEOJsonLd from "@/components/seo-jsonld";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -110,8 +109,8 @@ export default function RootLayout({
       <body className={`${inter.variable} ${ibmPlexMono.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <SupabaseProvider>
-            {/* Top-right auth buttons (only on home/login/register when logged out) */}
-            <AuthLinksClient />
+            {/* Top-right auth buttons removed to fix double header and webpack issues */}
+            {/* <AuthLinksClient /> */}
             {children}
             <Toaster />
             {/* Vercel Analytics and Speed Insights */}

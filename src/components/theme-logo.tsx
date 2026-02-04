@@ -24,8 +24,8 @@ export default function ThemeLogo({ className, alt = "Acadlabs Logo" }: ThemeLog
   }
 
   const currentTheme = theme === "system" ? resolvedTheme : theme;
-  const logoSrc = currentTheme === "dark" ? "/acadlabs-logo-light.svg" : "/acadlabs-logo-black.svg";
-  const dims = currentTheme === "dark" ? { width: 612, height: 408 } : { width: 500, height: 500 };
+  const logoSrc = currentTheme === "dark" ? "/favicon-white.ico" : "/favicon-black.ico";
+  const dims = { width: 40, height: 40 };
 
   return (
     <Image

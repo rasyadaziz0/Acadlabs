@@ -6,8 +6,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { useSupabase } from "./supabase-provider";
 
 function shouldShow(pathname: string) {
-  // Only show on the home page
-  return pathname === "/";
+  // content is handled by LandingPage now
+  return false;
 }
 
 export default function AuthLinksClient() {
