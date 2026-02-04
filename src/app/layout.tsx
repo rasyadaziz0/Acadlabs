@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SupabaseProvider } from "@/components/supabase-provider";
 import SEOJsonLd from "@/components/seo-jsonld";
+import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import PWARegister from "@/components/pwa/PWARegister";
@@ -118,6 +119,21 @@ export default function RootLayout({
             <SpeedInsights />
             {/* Register Service Worker for PWA */}
             <PWARegister />
+
+            {/* Google Analytics */}
+            <Script
+              strategy="afterInteractive"
+              src="https://www.googletagmanager.com/gtag/js?id=G-31NNYBWPJY"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+
+                gtag('config', 'G-31NNYBWPJY');
+              `}
+            </Script>
           </SupabaseProvider>
         </ThemeProvider>
       </body>
