@@ -17,26 +17,23 @@ export function useAudioRecorder({ onTranscriptionComplete }: UseAudioRecorderPr
             mediaRecorderRef.current = mediaRecorder;
             const chunks: Blob[] = [];
 
-            mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) chunks.push(event.data);
+            };
+
             mediaRecorder.onstop = async () => {
-                const consumedStream = mediaRecorder.stream;
-
-                const blob = new Blob(chunks, { type: 'audio/m4a' });
-                const file = new File([blob], 'voice.m4a', { type: 'audio/m4a' });
-
-                // Stop all tracks
-                stream.getTracks().forEach(track => track.stop());
-
-                // Handle Upload
-                await handleTranscribe(file);
+                stream.getTracks().forEach((track) => track.stop());
+                const audioBlob = new Blob(chunks, { type: "audio/m4a" });
+                const audioFile = new File([audioBlob], "voice.m4a", { type: "audio/m4a" });
+                await handleTranscribe(audioFile);
             };
 
             mediaRecorder.start();
             setIsRecording(true);
             toast.info("Mendengarkan...");
-        } catch (error) {
-            console.error("Mic Error:", error);
-            toast.error("Gagal akses mikrofon");
+        } catch (err) {
+            console.error("Mic Error:", err);
+            toast.error("Gagal akses mikrofon. Pastikan izin diberikan.");
         }
     };
 
@@ -48,11 +45,16 @@ export function useAudioRecorder({ onTranscriptionComplete }: UseAudioRecorderPr
     };
 
     const toggleRecording = () => {
-        isRecording ? stopRecording() : startRecording();
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
     };
 
     const handleTranscribe = async (file: File) => {
         setIsTranscribing(true);
+        const toastId = toast.loading("Mentranskrip suara...");
         const formData = new FormData();
         formData.append("file", file);
 
@@ -61,21 +63,23 @@ export function useAudioRecorder({ onTranscriptionComplete }: UseAudioRecorderPr
                 method: "POST",
                 body: formData,
             });
+
+            if (!res.ok) throw new Error("Gagal request ke API");
+
             const data = await res.json();
             if (data.text) {
                 onTranscriptionComplete(data.text);
-                toast.success("Transkripsi berhasil");
+                toast.success("Selesai!", { id: toastId });
+            } else {
+                throw new Error("Tidak ada text yang dikembalikan");
             }
-        } catch (err) {
-            toast.error("Gagal transkripsi");
+        } catch (error) {
+            console.error(error);
+            toast.error("Gagal mengubah suara ke teks", { id: toastId });
         } finally {
             setIsTranscribing(false);
         }
     };
 
-    return {
-        isRecording,
-        isTranscribing,
-        toggleRecording
-    };
+    return { isRecording, isTranscribing, toggleRecording };
 }

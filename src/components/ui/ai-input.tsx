@@ -2,18 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowUp, Search, Plus, X, Globe, Mic, Image as ImageIcon, FileText, AudioLines, StopCircle, Loader2 } from "lucide-react"
+import { ArrowUp, Search, Plus, X, Globe, Mic, Image as ImageIcon, FileText, StopCircle, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { Textarea } from "@/components/ui/textarea"
-import { useAudioRecorder } from "@/hooks/use-audio-recorder"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useAudioRecorder } from "@/hooks/use-audio-recorder"
 
 interface UseAutoResizeTextareaProps {
   minHeight: number
@@ -37,7 +37,6 @@ function useAutoResizeTextarea({
         return
       }
 
-      // Temporarily set height to auto/minHeight to get correct scrollHeight
       textarea.style.height = `${minHeight}px`
 
       const scrollHeight = textarea.scrollHeight
@@ -110,12 +109,10 @@ export default function AiInput({
     maxHeight: MAX_HEIGHT,
   })
   const [imagePreview, setImagePreview] = useState<string | null>(null)
-
   const [selectedFile, setSelectedFile] = useState<File | null>(attachedFile ?? null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-
-
+  // HOOK INTEGRATION
   const { isRecording, isTranscribing, toggleRecording } = useAudioRecorder({
     onTranscriptionComplete: (text) => {
       const newText = value ? `${value} ${text}` : text;
@@ -124,7 +121,6 @@ export default function AiInput({
     }
   });
 
-  // Ensure text-only mode clears any previously selected file
   useEffect(() => {
     if (!allowFiles) {
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -142,7 +138,7 @@ export default function AiInput({
     e.preventDefault()
     e.stopPropagation()
     if (fileInputRef.current) {
-      fileInputRef.current.value = "" // Reset file input
+      fileInputRef.current.value = ""
     }
     setSelectedFile(null)
     setImagePreview(null)
@@ -191,11 +187,9 @@ export default function AiInput({
     }
   }, [imagePreview])
 
-  // Sync from parent when attachedFile changes (controlled mode)
   useEffect(() => {
     if (attachedFile === undefined) return
     setSelectedFile(attachedFile)
-    // Revoke old preview when switching
     if (imagePreview) URL.revokeObjectURL(imagePreview)
     if (attachedFile && attachedFile.type?.startsWith("image/")) {
       const url = URL.createObjectURL(attachedFile)
@@ -205,19 +199,17 @@ export default function AiInput({
     }
   }, [attachedFile])
 
-
-
   return (
     <div className={cn("w-full max-w-full overflow-hidden py-2 px-4", className)}>
       <motion.div
         layout
         className={cn(
           "relative flex items-end w-full p-2 rounded-[26px] border border-transparent transition-all shadow-sm",
-          "bg-[#f4f4f4] dark:bg-[#303030]", // Updated dark mode bg to match ChatGPT
-          "focus-within:bg-[#f4f4f4] dark:focus-within:bg-[#303030]"
+          "bg-[#f4f4f4] dark:bg-[#303030]",
+          "focus-within:bg-[#f4f4f4] dark:focus-within:bg-[#303030]",
+          isRecording && "ring-2 ring-red-500/50 bg-red-50/50 dark:bg-red-900/10"
         )}
       >
-        {/* Left Actions: Plus Menu */}
         <div className="flex gap-2 items-center pb-2 pl-1 relative z-10">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -262,9 +254,7 @@ export default function AiInput({
           </DropdownMenu>
         </div>
 
-        {/* Textarea Container */}
         <div className="flex-1 min-w-0 relative flex flex-col pl-1">
-          {/* File Previews (Inside Capsule) */}
           {allowFiles && (
             <div className="px-2 pt-2 empty:hidden">
               {imagePreview && (
@@ -290,7 +280,6 @@ export default function AiInput({
           )}
 
           <div className="relative flex flex-col">
-            {/* Search Mode Indicator */}
             <AnimatePresence>
               {useSearch && (
                 <motion.div
@@ -314,7 +303,7 @@ export default function AiInput({
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 disabled={isLoading}
-                placeholder={useSearch ? "Telusuri web..." : "Tanyakan apa saja..."}
+                placeholder={isRecording ? "Sedang mendengarkan..." : (useSearch ? "Telusuri web..." : "Tanyakan apa saja...")}
                 className="w-full min-h-[44px] !bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none resize-none py-3 px-1 text-[16px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 leading-relaxed custom-scrollbar"
                 style={{ maxHeight: `${MAX_HEIGHT}px` }}
               />
@@ -322,17 +311,15 @@ export default function AiInput({
           </div>
         </div>
 
-        {/* Right Actions: Mic & Send */}
         <div className="flex items-center gap-2 pb-2 pr-2">
-          {/* Microphone Placeholder */}
           <button
             type="button"
             onClick={toggleRecording}
-            disabled={isTranscribing}
+            disabled={isTranscribing || isLoading}
             className={cn(
-              "p-2 rounded-full transition-all duration-200 hidden sm:flex items-center justify-center",
+              "p-2 rounded-full transition-all duration-200 flex items-center justify-center",
               isRecording
-                ? "bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                ? "bg-red-500 text-white hover:bg-red-600 animate-pulse shadow-md"
                 : "text-zinc-900 dark:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700",
               isTranscribing && "opacity-50 cursor-not-allowed"
             )}
@@ -341,7 +328,7 @@ export default function AiInput({
             {isTranscribing ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : isRecording ? (
-              <StopCircle className="h-5 w-5 animate-pulse" />
+              <StopCircle className="h-5 w-5 fill-current" />
             ) : (
               <Mic className="h-5 w-5" />
             )}
@@ -352,7 +339,6 @@ export default function AiInput({
             onClick={() => canSend ? onSubmit() : null}
             className={cn(
               "h-10 w-10 rounded-full flex items-center justify-center transition-all duration-200",
-              // ChatGPT Style: White circle with black icon when active/empty (Visual match)
               canSend || isLoading
                 ? "bg-black text-white dark:bg-white dark:text-black shadow-md hover:opacity-90"
                 : "bg-zinc-200 text-zinc-400 dark:bg-zinc-700 dark:text-zinc-500 cursor-not-allowed",
