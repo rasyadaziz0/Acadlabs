@@ -5,17 +5,33 @@ import { Button } from "@/components/ui/button";
 import ThemeLogo from "@/components/theme-logo";
 import { motion } from "framer-motion";
 import { ArrowRight, Sparkles } from "lucide-react";
+import GlobeWireframe from "@/components/ui/globe-wireframe";
+import { AnimatedButton } from "@/components/ui/animated-button";
 
 export default function LandingPage() {
     return (
-        <div className="flex min-h-screen flex-col bg-background text-foreground selection:bg-primary/20">
+        <div className="relative flex min-h-screen flex-col bg-background text-foreground selection:bg-primary/20 overflow-hidden">
+            {/* Globe Background */}
+            <div className="absolute inset-x-0 bottom-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">
+                <div className="translate-y-[10%] md:translate-y-[35%] opacity-40">
+                    <GlobeWireframe
+                        className="w-[140vw] md:w-[1000px] aspect-square"
+                        scale={1}
+                        showGraticule={false}
+                        autoRotate={true}
+                        autoRotateSpeed={0.3}
+                        variant="solid"
+                    />
+                </div>
+            </div>
+
             {/* Decorative gradients */}
             <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
                 <div className="absolute top-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-primary/5 blur-[100px]" />
                 <div className="absolute bottom-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]" />
             </div>
 
-            <header className="container mx-auto flex h-20 items-center justify-between px-4 sm:px-8">
+            <header className="relative z-10 container mx-auto flex h-20 items-center justify-between px-4 sm:px-8">
                 <div className="flex items-center gap-2">
                     <ThemeLogo className="h-8 w-auto" alt="AcadLabs Logo" />
                     <span className="text-xl font-bold tracking-tight">AcadLabs</span>
@@ -27,25 +43,38 @@ export default function LandingPage() {
                         </Button>
                     </Link>
                     <Link href="/register">
-                        <Button size="sm" className="hidden sm:inline-flex rounded-full px-6">
+                        <Button size="sm" className="rounded-full px-4 text-xs sm:text-sm sm:px-6">
                             Sign up
                         </Button>
                     </Link>
                 </div>
             </header>
 
-            <main className="flex flex-1 flex-col items-center justify-center px-4 text-center sm:px-8 pb-20">
+            <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 text-center sm:px-8 pb-20">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, ease: "easeOut" }}
                     className="flex flex-col items-center max-w-3xl mx-auto space-y-8"
                 >
-                    <div className="inline-flex items-center rounded-full border bg-secondary/50 px-3 py-1 text-sm text-secondary-foreground backdrop-blur-sm">
-                        <Sparkles className="mr-2 h-3.5 w-3.5 text-yellow-500" />
-                        <span className="text-xs font-medium">Powering the next generation of learning</span>
-                    </div>
-
+                    <AnimatedButton
+                        className="bg-green-500 text-white"
+                        variant="default"
+                        size="default"
+                        glow={true}
+                        textEffect="normal"
+                        uppercase={true}
+                        rounded="custom"
+                        asChild={false}
+                        hideAnimations={false}
+                        shimmerColor="#ffe014ff"
+                        shimmerSize="0.15em"
+                        shimmerDuration="3s"
+                        borderRadius="100px"
+                        background="rgba(0, 0, 0, 1)"
+                    >
+                        Powering the next generation of learning
+                    </AnimatedButton>
                     <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
                         Master your <br />
                         <span className="bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
