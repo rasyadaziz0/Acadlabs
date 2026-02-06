@@ -14,7 +14,7 @@ const RATE_WINDOW_MS = 60_000; // 1 minute
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, hcaptchaToken } = await request.json();
+    const { email, password, turnstileToken } = await request.json();
     if (!email || !password) {
       return NextResponse.json(
         { error: "Email dan password wajib diisi" },
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       );
     }
     const passwordStr = typeof password === "string" ? password : String(password ?? "");
-    const hToken = typeof hcaptchaToken === "string" ? hcaptchaToken.trim() : "";
+    const tToken = typeof turnstileToken === "string" ? turnstileToken.trim() : "";
 
     // Rate limit early
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
@@ -47,26 +47,26 @@ export async function POST(request: NextRequest) {
     recent.push(now);
     rateMap.set(ip, recent);
 
-    // Verify hCaptcha
-    const hcaptchaSecret = process.env.HCAPTCHA_SECRET_KEY;
-    if (!hcaptchaSecret) {
+    // Verify Turnstile
+    const turnstileSecret = process.env.CLOUDFLARE_SECRET_KEY;
+    if (!turnstileSecret) {
       return NextResponse.json(
-        { error: "Konfigurasi HCaptcha tidak ditemukan" },
+        { error: "Konfigurasi Turnstile tidak ditemukan" },
         { status: 500 }
       );
     }
-    if (!hToken) {
+    if (!tToken) {
       return NextResponse.json(
         { error: "Captcha wajib diisi" },
         { status: 400 }
       );
     }
-    const verifyRes = await fetch("https://hcaptcha.com/siteverify", {
+    const verifyRes = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        secret: hcaptchaSecret,
-        response: hToken,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        secret: turnstileSecret,
+        response: tToken,
       }),
     });
     const verifyJson = await verifyRes.json();

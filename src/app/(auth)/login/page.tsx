@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Script from "next/script";
 import Link from "next/link";
 import Image from "next/image";
 
 import { createBrowserClient } from "@supabase/ssr";
 import { Github } from "lucide-react";
+import Turnstile from "@/components/auth/Turnstile";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,9 +21,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [siteKey, setSiteKey] = useState<string | null>(null);
-  const [hcaptchaToken, setHcaptchaToken] = useState<string | null>(null);
-  const [widgetId, setWidgetId] = useState<number | null>(null);
-  const [captchaReady, setCaptchaReady] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     const check = async () => {
@@ -33,41 +31,27 @@ export default function LoginPage() {
     check();
   }, [router, supabase]);
 
-  // Fetch hCaptcha site key
+  // Fetch Turnstile site key
   useEffect(() => {
     const loadSiteKey = async () => {
       try {
         const res = await fetch("/api/auth/hcaptcha-sitekey");
         const json = await res.json();
         if (res.ok) setSiteKey(json.siteKey);
-        else setError(json?.error || "HCaptcha tidak tersedia");
+        else setError(json?.error || "Captcha service unavailable");
       } catch {
-        setError("Gagal memuat captcha");
+        setError("Failed to load captcha");
       }
     };
     loadSiteKey();
   }, []);
-
-  // Render hCaptcha widget once script is ready
-  useEffect(() => {
-    if (!siteKey || !captchaReady || widgetId !== null) return;
-    const el = document.getElementById("hcaptcha-container");
-    if (!el || !window.hcaptcha) return;
-    const id = window.hcaptcha.render(el, {
-      sitekey: siteKey,
-      callback: (token: string) => setHcaptchaToken(token),
-      "error-callback": () => setHcaptchaToken(null),
-      "expired-callback": () => setHcaptchaToken(null),
-    });
-    setWidgetId(id);
-  }, [siteKey, captchaReady, widgetId]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      if (!hcaptchaToken) {
+      if (!turnstileToken) {
         setError("Captcha wajib diisi");
         setLoading(false);
         return;
@@ -75,7 +59,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, hcaptchaToken }),
+        body: JSON.stringify({ email, password, turnstileToken }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Gagal login");
@@ -97,10 +81,9 @@ export default function LoginPage() {
       }
     } finally {
       setLoading(false);
-      try {
-        window.hcaptcha?.reset(widgetId ?? undefined);
-        setHcaptchaToken(null);
-      } catch {}
+      // Turnstile automatically manages its state, but we reset our token
+      setTurnstileToken(null);
+      window.turnstile?.reset();
     }
   };
 
@@ -115,11 +98,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <Script
-        src="https://hcaptcha.com/1/api.js?hl=id&render=explicit"
-        strategy="lazyOnload"
-        onLoad={() => setCaptchaReady(true)}
-      />
+
       <header className="px-6 py-4 text-sm">
         <Link href="/" className="font-semibold text-xl text-yellow-500">Acadlabs</Link>
       </header>
@@ -144,11 +123,20 @@ export default function LoginPage() {
               placeholder="Password"
               className="w-full h-12 rounded-full border border-input bg-background px-5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <div id="hcaptcha-container" className="pt-1 flex justify-center" />
+            <div className="pt-1 flex justify-center">
+              {siteKey && (
+                <Turnstile
+                  siteKey={siteKey}
+                  onVerify={setTurnstileToken}
+                  onError={() => setTurnstileToken(null)}
+                  onExpire={() => setTurnstileToken(null)}
+                />
+              )}
+            </div>
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               type="submit"
-              disabled={loading || !hcaptchaToken}
+              disabled={loading || !turnstileToken}
               className="w-full h-12 rounded-full bg-foreground text-background font-medium hover:opacity-90 transition disabled:opacity-50"
             >
               {loading ? "Processing..." : "Continue"}
@@ -170,7 +158,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => signInWithProvider("google")}
-              disabled={loading || !hcaptchaToken}
+              disabled={loading || !turnstileToken}
               className="w-full h-11 rounded-full border flex items-center justify-center gap-2 hover:bg-muted transition"
             >
               <Image src="https://cdn1.iconfinder.com/data/icons/google-s-logo/150/Google_Icons-09-512.png" width={20} height={20} alt="Google" unoptimized />
@@ -179,7 +167,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => signInWithProvider("github")}
-              disabled={loading || !hcaptchaToken}
+              disabled={loading || !turnstileToken}
               className="w-full h-11 rounded-full border flex items-center justify-center gap-2 hover:bg-muted transition"
             >
               <Github className="h-4 w-4" />

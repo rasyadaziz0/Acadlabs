@@ -7,6 +7,7 @@ import Image from "next/image";
 import { createBrowserClient } from "@supabase/ssr";
 import { Github } from "lucide-react";
 import { validatePassword } from "@/lib/password-validator";
+import Turnstile from "@/components/auth/Turnstile";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -25,8 +26,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [siteKey, setSiteKey] = useState<string | null>(null);
-  const [hcaptchaToken, setHcaptchaToken] = useState<string | null>(null);
-  const [widgetId, setWidgetId] = useState<number | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     const check = async () => {
@@ -36,7 +36,7 @@ export default function RegisterPage() {
     check();
   }, [router, supabase]);
 
-  // Fetch hCaptcha site key
+  // Fetch Turnstile site key
   useEffect(() => {
     const loadSiteKey = async () => {
       try {
@@ -45,43 +45,16 @@ export default function RegisterPage() {
         if (res.ok) {
           setSiteKey(json.siteKey);
         } else {
-          setError(json?.error || "HCaptcha tidak tersedia");
+          setError(json?.error || "Captcha service unavailable");
         }
       } catch {
-        setError("Gagal memuat captcha");
+        setError("Failed to load captcha");
       }
     };
     loadSiteKey();
   }, []);
 
-  // Load hCaptcha script and render widget
-  useEffect(() => {
-    if (!siteKey || widgetId !== null) return;
-    const ensureScript = () =>
-      new Promise<void>((resolve) => {
-        if (typeof window === "undefined") return;
-        if (window.hcaptcha) return resolve();
-        const s = document.createElement("script");
-        s.src = "https://hcaptcha.com/1/api.js?hl=id&render=explicit";
-        s.async = true;
-        s.defer = true;
-        s.onload = () => resolve();
-        document.head.appendChild(s);
-      });
-    const renderWidget = async () => {
-      await ensureScript();
-      const el = document.getElementById("hcaptcha-container");
-      if (!el || !window.hcaptcha) return;
-      const id = window.hcaptcha.render(el, {
-        sitekey: siteKey,
-        callback: (token: string) => setHcaptchaToken(token),
-        "error-callback": () => setHcaptchaToken(null),
-        "expired-callback": () => setHcaptchaToken(null),
-      });
-      setWidgetId(id);
-    };
-    renderWidget();
-  }, [siteKey, widgetId]);
+
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -95,7 +68,7 @@ export default function RegisterPage() {
         setLoading(false);
         return;
       }
-      if (!hcaptchaToken) {
+      if (!turnstileToken) {
         setError("Captcha wajib diisi");
         setLoading(false);
         return;
@@ -103,7 +76,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, hcaptchaToken }),
+        body: JSON.stringify({ email, password, turnstileToken }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -114,10 +87,8 @@ export default function RegisterPage() {
       setError(err instanceof Error ? err.message : "An error occurred. Please try again.");
     } finally {
       setLoading(false);
-      try {
-        window.hcaptcha?.reset(widgetId ?? undefined);
-        setHcaptchaToken(null);
-      } catch {}
+      setTurnstileToken(null);
+      window.turnstile?.reset();
     }
   };
 
@@ -156,12 +127,21 @@ export default function RegisterPage() {
               placeholder="Password"
               className="w-full h-12 rounded-full border border-input bg-background px-5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <div id="hcaptcha-container" className="pt-1 flex justify-center" />
+            <div className="pt-1 flex justify-center">
+              {siteKey && (
+                <Turnstile
+                  siteKey={siteKey}
+                  onVerify={setTurnstileToken}
+                  onError={() => setTurnstileToken(null)}
+                  onExpire={() => setTurnstileToken(null)}
+                />
+              )}
+            </div>
             {error && <p className="text-red-500 text-sm">{error}</p>}
             {info && <p className="text-green-600 text-sm">{info}</p>}
             <button
               type="submit"
-              disabled={loading || !hcaptchaToken}
+              disabled={loading || !turnstileToken}
               className="w-full h-12 rounded-full bg-foreground text-background font-medium hover:opacity-90 transition disabled:opacity-50"
             >
               {loading ? "Processing..." : "Masuk"}
