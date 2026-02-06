@@ -74,11 +74,11 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+            value: "camera=(), microphone=(self), geolocation=(), browsing-topics=()",
           },
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://vercel.live https://js.hcaptcha.com https://*.hcaptcha.com; style-src 'self' 'unsafe-inline' https://*.hcaptcha.com; img-src 'self' blob: data: https:; font-src 'self' data:; connect-src 'self' https:; frame-src 'self' https://*.hcaptcha.com; wss://*.supabase.co;",
+            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://vercel.live https://js.hcaptcha.com https://*.hcaptcha.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://*.hcaptcha.com; img-src 'self' blob: data: https:; font-src 'self' data:; connect-src 'self' https:; frame-src 'self' https://*.hcaptcha.com https://www.tradingview.com https://s3.tradingview.com https://s.tradingview.com; wss://*.supabase.co;",
           },
         ],
       },

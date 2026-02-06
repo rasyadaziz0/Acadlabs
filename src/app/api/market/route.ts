@@ -60,11 +60,12 @@ export async function POST(req: Request) {
                 const startDate = new Date();
                 startDate.setDate(endDate.getDate() - 30);
 
-                return await yahooFinance.historical(sym, {
+                const result = await yahooFinance.chart(sym, {
                     period1: startDate,
                     period2: endDate,
                     interval: "1d",
                 });
+                return result.quotes;
             } catch (e) {
                 return [];
             }
@@ -115,13 +116,15 @@ export async function POST(req: Request) {
 
         if (yahooResult && yahooResult.length > 0) {
             // Populate Mobile Chart Data
-            mobileChartData = yahooResult.map((item: any) => ({
-                time: item.date.toISOString().split("T")[0],
-                open: item.open,
-                high: item.high,
-                low: item.low,
-                close: item.close,
-            }));
+            mobileChartData = yahooResult
+                .filter((item: any) => item.date && item.open !== null && item.high !== null && item.low !== null && item.close !== null)
+                .map((item: any) => ({
+                    time: item.date.toISOString().split("T")[0],
+                    open: item.open,
+                    high: item.high,
+                    low: item.low,
+                    close: item.close,
+                }));
 
             // Fallback for AI if CoinGecko failed (or if Stock/Forex)
             if (!aiContextData) {

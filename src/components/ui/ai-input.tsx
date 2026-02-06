@@ -1,11 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, useLayoutEffect } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowUp, Search, Plus, X, Globe, Mic, Image as ImageIcon, FileText, StopCircle, Loader2 } from "lucide-react"
+import { ArrowUp, Plus, X, Globe, Mic, Image as ImageIcon, FileText, StopCircle, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
+// Ensure Textarea is imported from your UI lib, or use native textarea if preferred.
+// Assuming your component path is correct:
 import { Textarea } from "@/components/ui/textarea"
 import {
   DropdownMenu,
@@ -37,28 +39,18 @@ function useAutoResizeTextarea({
         return
       }
 
-      // 1. Save current scroll position
-      const currentScrollTop = textarea.scrollTop
-
-      // 2. Reset height to auto to correctly calculate scrollHeight (shrink if needed)
-      textarea.style.height = "auto"
-
+      // 1. Calculate new height
+      textarea.style.height = `${minHeight}px` // Reset momentarily to get correct scrollHeight
       const scrollHeight = textarea.scrollHeight
-      const isScrollable = scrollHeight > (maxHeight ?? Number.POSITIVE_INFINITY)
 
       const newHeight = Math.max(
         minHeight,
         Math.min(scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY)
       )
 
-      // 3. Apply new height and overflow style
+      // 2. Set new height
       textarea.style.height = `${newHeight}px`
-      textarea.style.overflowY = isScrollable ? "auto" : "hidden"
-
-      // 4. Restore scroll position if scrollable, to prevent "jumping"
-      if (isScrollable) {
-        textarea.scrollTop = currentScrollTop
-      }
+      textarea.style.overflowY = scrollHeight > newHeight ? "auto" : "hidden"
     },
     [minHeight, maxHeight]
   )
@@ -124,6 +116,7 @@ export default function AiInput({
     onTranscriptionComplete: (text) => {
       const newText = value ? `${value} ${text}` : text;
       onChange(newText);
+      // Wait for React to update state
       setTimeout(() => adjustHeight(), 0);
     }
   });
@@ -171,11 +164,17 @@ export default function AiInput({
     onFileSelected?.(file)
   }
 
+  // Optimize Handle Input Change to prevent glitching
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    onChange(e.target.value)
-    // Defer adjustment slightly to ensure value update paints first, usually works better for React state updates
-    requestAnimationFrame(() => adjustHeight())
+    const val = e.target.value
+    onChange(val)
+    adjustHeight()
   }
+
+  // Use useLayoutEffect to adjust height immediately after render when value changes
+  useLayoutEffect(() => {
+    adjustHeight()
+  }, [value, adjustHeight])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

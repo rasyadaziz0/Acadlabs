@@ -11,41 +11,55 @@ const TradingViewWidget = ({ symbol }: TradingViewWidgetProps) => {
     const container = useRef<HTMLDivElement>(null);
     const { theme } = useTheme();
 
-    // Helper: Map Yahoo/Input Symbol to TradingView Symbol
+    // Helper: Safely map symbols to TradingView format
     const getTVSymbol = (sym: string): string => {
         const s = sym.toUpperCase().trim();
 
-        // 1. Gold
+        // 1. If prefix exists (e.g. "BINANCE:BTCUSDT"), return as is
+        if (s.includes(":")) {
+            return s;
+        }
+
+        // 2. Handle Gold / XAU
         if (["XAU", "GOLD", "GC=F", "XAUUSD"].includes(s)) {
             return "OANDA:XAUUSD";
         }
 
-        if (s.endsWith("USD")) {
+        // 3. Handle Crypto standard (Ends with USD -> USDT)
+        if (s.endsWith("USD") && !s.includes("USDT")) {
             const coin = s.replace("USD", "");
             return `${coin}USDT`;
         }
 
-        // 3. Indo Stocks (Ends with .JK)
-        // Map "BBCA.JK" -> "IDX:BBCA"
+        // 4. Handle Crypto USDT raw (e.g. BTCUSDT -> BINANCE:BTCUSDT)
+        if (s.endsWith("USDT")) {
+            return `${s}`;
+        }
+
+        // 5. Indo Stocks (Ends with .JK -> IDX:...)
         if (s.endsWith(".JK")) {
             const stock = s.replace(".JK", "");
             return `IDX:${stock}`;
         }
 
-        // 4. Default / US Stocks
-        if (/^[A-Z]+$/.test(s)) {
-            return `${s}`;
-        }
-
+        // 6. Default fallback
         return s;
     };
 
     useEffect(() => {
         if (!container.current) return;
 
-        // Clear previous widget
+        // Cleanup previous render
         container.current.innerHTML = "";
 
+        // 1. Create Wrapper (MANDATORY for TradingView)
+        const widgetContainer = document.createElement("div");
+        widgetContainer.className = "tradingview-widget-container__widget";
+        widgetContainer.style.height = "100%";
+        widgetContainer.style.width = "100%";
+        container.current.appendChild(widgetContainer);
+
+        // 2. Create Script
         const script = document.createElement("script");
         script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
         script.type = "text/javascript";
@@ -70,14 +84,18 @@ const TradingViewWidget = ({ symbol }: TradingViewWidgetProps) => {
         };
 
         script.innerHTML = JSON.stringify(config);
+
+        // 3. Append script AFTER wrapper
         container.current.appendChild(script);
 
-    }, [symbol, theme]); // Re-render on symbol or theme change
+    }, [symbol, theme]);
 
     return (
-        <div className="w-full h-full border rounded-lg overflow-hidden bg-card" ref={container}>
-            {/* Widget Injected Here */}
-        </div>
+        <div
+            className="tradingview-widget-container w-full h-full bg-card"
+            ref={container}
+            style={{ height: "100%", width: "100%" }}
+        />
     );
 };
 
