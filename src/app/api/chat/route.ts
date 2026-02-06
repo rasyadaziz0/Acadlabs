@@ -2,33 +2,58 @@ import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 import { sanitizeUserText, sanitizeAIText, normalizeWhitespaceKeepEdges } from "@/lib/sanitize";
 import { generateChatTitle } from "@/lib/title";
-import {
-  ChatMessage,
-  getGroqKeys,
-} from "@/lib/ai-service";
+import { ChatMessage, getGroqKeys } from "@/lib/ai-service";
 import { trimMessagesForBudget } from "@/lib/token-utils";
 import Groq from "groq-sdk";
+import { rateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function isChatMessage(val: unknown): val is ChatMessage {
-  if (!val || typeof val !== "object") return false;
-  const obj = val as Record<string, unknown>;
-  const role = obj.role;
-  const content = obj.content;
-  return (
-    (role === "system" || role === "user" || role === "assistant") &&
-    typeof content === "string"
-  );
-}
+// Zod Schemas
+const MessageSchema = z.object({
+  role: z.enum(["system", "user", "assistant"]),
+  content: z.string(),
+});
+
+const ChatRequestSchema = z.object({
+  messages: z.array(MessageSchema),
+  searchResults: z.array(z.any()).optional(),
+  chatId: z.string().optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { messages, searchResults, chatId } = body as Record<string, unknown>;
+    // 1. Rate Limiting
+    const ip = request.headers.get("x-forwarded-for") ?? "127.0.0.1";
+    const { success, limit, reset, remaining } = await rateLimit(ip);
 
-    // 1. Supabase & User
+    if (!success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Limit": limit.toString(),
+            "X-RateLimit-Remaining": remaining.toString(),
+            "X-RateLimit-Reset": reset.toString(),
+          },
+        }
+      );
+    }
+
+    const body = await request.json();
+
+    // 2. Validation with Zod
+    const validation = ChatRequestSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ error: "Invalid request data", details: validation.error.format() }, { status: 400 });
+    }
+
+    const { messages, searchResults, chatId } = validation.data;
+
+    // 3. Supabase & User
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -40,35 +65,28 @@ export async function POST(request: NextRequest) {
     );
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Security Check: User must be logged in (optional depending on app logic, but generally required for persistence)
-    // If saving to DB is critical, we should probably enforce it. But to allow guest chat:
     const userId = user?.id;
     const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || "Teman";
-
-    // 2. Validate
-    if (!messages || !Array.isArray(messages)) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-    }
 
     const groqKeys = getGroqKeys();
     if (groqKeys.length === 0) {
       return NextResponse.json({ error: "No API Keys configured" }, { status: 500 });
     }
-    // Randomize key to distribute load
     const apiKey = groqKeys[Math.floor(Math.random() * groqKeys.length)];
     const groq = new Groq({ apiKey });
 
-    const incoming: ChatMessage[] = (messages as unknown[]).filter(isChatMessage) as ChatMessage[];
-    const hasUserMessage = incoming.some(m => m.role === "user" && m.content.trim().length > 0);
+    // Filter empty user messages
+    const validMessages = messages.filter(m => m.content.trim().length > 0);
+    const hasUserMessage = validMessages.some(m => m.role === "user");
+
     if (!hasUserMessage) {
       return NextResponse.json({ error: "User message empty" }, { status: 400 });
     }
 
-    // 3. Auto Title (Fire & Forget) - Only if it's the first message
-    if (chatId && typeof chatId === "string" && incoming.length === 1 && incoming[0].role === "user") {
-      const first = incoming[0].content;
+    // 4. Auto Title (Fire & Forget)
+    if (chatId && validMessages.length === 1 && validMessages[0].role === "user") {
+      const first = validMessages[0].content;
       (async () => {
-        // Delay slightly to let the main logic proceed
         await new Promise(r => setTimeout(r, 100));
         try {
           const t = await generateChatTitle(first);
@@ -79,10 +97,10 @@ export async function POST(request: NextRequest) {
       })();
     }
 
-    // 4. Formatter
-    const formatted: ChatMessage[] = incoming.map((msg) => {
+    // 5. Formatter
+    const formatted: ChatMessage[] = validMessages.map((msg) => {
       if (msg.role === "user") return { role: "user", content: sanitizeUserText(msg.content) };
-      return { role: msg.role, content: normalizeWhitespaceKeepEdges(msg.content) };
+      return { role: msg.role as "system" | "user" | "assistant", content: normalizeWhitespaceKeepEdges(msg.content) };
     });
 
     const systemPersona: ChatMessage = {
@@ -109,13 +127,13 @@ Jika user bertanya yang tidak relevan dengan akademik, jawab sopan tapi arahkan 
       finalMessages.push({ role: "system", content: `Search Context:\n${sr}` });
     }
 
-    // 5. Trim
+    // 6. Trim
     const trimmed = trimMessagesForBudget(
       finalMessages,
       Number(process.env.GROQ_MAX_INPUT_TOKENS) || 6000
     );
 
-    // 6. Stream Call
+    // 7. Stream Call
     let stream;
     try {
       stream = await groq.chat.completions.create({
@@ -132,7 +150,7 @@ Jika user bertanya yang tidak relevan dengan akademik, jawab sopan tapi arahkan 
       throw e;
     }
 
-    // 7. Readable Stream Response
+    // 8. Readable Stream Response
     const responseStream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
@@ -153,8 +171,8 @@ Jika user bertanya yang tidak relevan dengan akademik, jawab sopan tapi arahkan 
           controller.error(err);
         } finally {
           controller.close();
-          // 8. Save to DB (Delayed Persistence)
-          if (userId && chatId && typeof chatId === "string" && fullContent.trim()) {
+          // 9. Save to DB
+          if (userId && chatId && fullContent.trim()) {
             await supabase.from("messages").insert({
               role: "assistant",
               content: sanitizeAIText(fullContent),

@@ -11,6 +11,7 @@ import { CodeBlock } from "./CodeBlock";
 import { Table, Thead, Tbody, Tr, Th, Td } from "./TableElements";
 import { remarkBrToBreak } from "./plugins";
 import { decodeHtmlEntities } from "@/components/math-solver/math-utils";
+import DOMPurify from "isomorphic-dompurify";
 
 export interface MarkdownRendererProps {
   content: string;
@@ -51,10 +52,22 @@ export default function MarkdownRenderer({ content, role, isStreaming = false, o
   const [linkToOpen, setLinkToOpen] = useState<string | null>(null);
   const deferred = useDeferredValue(content);
 
+  // 1. Sanitize raw input to strip scripts/iframes before any processing
+  const cleanContent = useMemo(() => {
+    const raw = isStreaming ? deferred : content;
+    return DOMPurify.sanitize(raw, {
+      USE_PROFILES: { html: true }, // Default safe HTML profile
+      FORBID_TAGS: ["script", "iframe", "object", "embed", "base", "head", "link", "meta", "title"],
+      FORBID_ATTR: ["style", "on*"], // Strip style and all event handlers
+      ADD_TAGS: [], // No extra tags allowed
+      ADD_ATTR: [],
+    });
+  }, [isStreaming, deferred, content]);
+
   // Use MathSolver's cleanup pipeline for "neat" layout
   const normalizedBody = useMemo(
-    () => normalizeDelimiters(decodeHtmlEntities(isStreaming ? deferred : content)),
-    [isStreaming, deferred, content]
+    () => normalizeDelimiters(decodeHtmlEntities(cleanContent)),
+    [cleanContent]
   );
 
   useEffect(() => {

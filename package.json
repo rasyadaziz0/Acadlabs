@@ -30,7 +30,9 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/topojson-client": "^3.1.5",
     "@types/topojson-specification": "^1.0.5",
+    "@upstash/ratelimit": "^2.0.8",
     "@vercel/analytics": "^1.5.0",
+    "@vercel/kv": "^3.0.0",
     "@vercel/speed-insights": "^1.2.0",
     "busboy": "^1.6.0",
     "class-variance-authority": "^0.7.1",
@@ -40,6 +42,7 @@
     "framer-motion": "^12.23.12",
     "groq-sdk": "^0.37.0",
     "html-react-parser": "^5.2.6",
+    "isomorphic-dompurify": "^2.35.0",
     "jszip": "^3.10.1",
     "katex": "^0.16.22",
     "lightweight-charts": "^5.1.0",
@@ -64,7 +67,8 @@
     "tesseract.js": "^5.1.0",
     "topojson-client": "^3.1.0",
     "vaul": "^1.1.2",
-    "yahoo-finance2": "^3.13.0"
+    "yahoo-finance2": "^3.13.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
