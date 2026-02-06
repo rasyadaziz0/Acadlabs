@@ -78,9 +78,11 @@ const TradingViewWidget = ({ symbol }: TradingViewWidgetProps) => {
             "locale": "id",
             "enable_publishing": false,
             "hide_top_toolbar": false,
+            "hide_side_toolbar": false,
             "allow_symbol_change": true,
             "calendar": false,
-            "support_host": "https://www.tradingview.com"
+            "support_host": "https://www.tradingview.com",
+            "enabled_features": ["countdown"]
         };
 
         script.innerHTML = JSON.stringify(config);
