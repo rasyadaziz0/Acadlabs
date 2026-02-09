@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import Editor from "@monaco-editor/react";
+import Editor, { loader } from "@monaco-editor/react";
+
+// --- FIX: Configure CDN globally to prevent 'vs/css!' loading errors ---
+loader.config({
+  paths: {
+    vs: "https://unpkg.com/monaco-editor@0.46.0/min/vs",
+  },
+});
 import { motion } from "framer-motion";
 import { Clipboard } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -95,7 +102,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
         model.setValue(code ?? " ");
         lastTextRef.current = code ?? " ";
       }
-    } catch {}
+    } catch { }
 
     // Throttled height updater (avoid excessive React state churn)
     const updateHeight = () => {
@@ -148,10 +155,10 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
           lastTextRef.current = desired;
           return;
         }
-      } catch {}
+      } catch { }
 
       if (desired === last) return;
-      
+
       if (desired.startsWith(last)) {
         const delta = desired.slice(last.length);
         const lastLine = model.getLineCount();
@@ -167,7 +174,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
       lastTextRef.current = desired;
 
       // Ensure layout is up to date after content changes
-      try { editor.layout(); } catch {}
+      try { editor.layout(); } catch { }
     });
   }, [code]);
 
