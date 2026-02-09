@@ -9,6 +9,8 @@ export type Message = {
   chat_id: string;
   user_id: string;
   created_at: string;
+  attachment_url?: string | null;
+  attachment_type?: string | null;
 };
 
 export function useRealtimeMessages(chatId?: string | null, userId?: string | null) {

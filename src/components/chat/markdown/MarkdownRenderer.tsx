@@ -153,7 +153,8 @@ export default function MarkdownRenderer({ content, role, isStreaming = false, o
       td: Td as any,
       img(props: any) {
         const { src, alt } = props as any;
-        return <img src={String(src || "")} alt={String(alt || "")} className="rounded-2xl max-w-full h-auto" />;
+        if (!src) return null;
+        return <img src={String(src)} alt={String(alt || "")} className="rounded-2xl max-w-full h-auto" />;
       },
     }),
     [isStreaming, role]
@@ -164,7 +165,12 @@ export default function MarkdownRenderer({ content, role, isStreaming = false, o
 
   return (
     <>
-      <ReactMarkdown remarkPlugins={remarkPluginsArr as any} rehypePlugins={rehypePluginsArr as any} components={markdownComponents}>
+      <ReactMarkdown
+        remarkPlugins={remarkPluginsArr as any}
+        rehypePlugins={rehypePluginsArr as any}
+        components={markdownComponents}
+        urlTransform={(value: string) => value}
+      >
         {normalizedBody}
       </ReactMarkdown>
       <LinkDialog url={linkToOpen} onOpenChange={(open) => setLinkToOpen(open ? linkToOpen : null)} />

@@ -177,7 +177,7 @@ export default function AiInput({
   }, [value, adjustHeight])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
       if (!isLoading && canSend) {
         onSubmit()
@@ -208,6 +208,15 @@ export default function AiInput({
 
   return (
     <div className={cn("w-full max-w-full overflow-hidden py-2 px-4", className)}>
+      {allowFiles && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,.pdf,.docx,.txt"
+          onChange={handleChange}
+          className="hidden"
+        />
+      )}
       <motion.div
         layout
         className={cn(
@@ -234,13 +243,6 @@ export default function AiInput({
             <DropdownMenuContent align="start" className="w-56 rounded-xl" sideOffset={8}>
               {allowFiles && (
                 <>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*,.pdf,.docx,.txt"
-                    onChange={handleChange}
-                    className="hidden"
-                  />
                   <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="cursor-pointer py-2.5">
                     <ImageIcon className="mr-2 h-4 w-4" />
                     <span>Upload Image</span>
