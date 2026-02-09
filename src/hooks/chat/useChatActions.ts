@@ -225,12 +225,12 @@ export function useChatActions(
             if (hasFile) {
                 try {
                     // Parallel: Upload to Storage AND Process OCR
-                    const [publicUrl, ocrRes] = await Promise.all([
+                    const [uploadResult, ocrRes] = await Promise.all([
                         uploadChatAttachment(attachedFile!),
                         handleFileUpload(attachedFile!)
                     ]);
 
-                    finalAttachmentUrl = publicUrl;
+                    finalAttachmentUrl = uploadResult.url;
                     const ocrText = ocrRes.content || "[No text found in file]";
                     finalContentForAI = `User Input: ${originalInput}\n\n[Attached File Content/OCR Result]:\n${ocrText}`;
                 } catch (error) {
