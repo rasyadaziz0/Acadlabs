@@ -67,6 +67,48 @@ export default function AppSidebarContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Realtime subscription for chat updates (e.g. auto-rename)
+  useEffect(() => {
+    const setupRealtime = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const channel = supabase
+        .channel(`realtime:chats:${userData.user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'chats',
+            filter: `user_id=eq.${userData.user.id}`
+          },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              const newChat = payload.new as Chat;
+              setChats((prev) => [newChat, ...prev]);
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedChat = payload.new as Chat;
+              setChats((prev) => prev.map((chat) => chat.id === updatedChat.id ? updatedChat : chat));
+            } else if (payload.eventType === 'DELETE') {
+              const deletedChat = payload.old as Chat;
+              setChats((prev) => prev.filter((chat) => chat.id !== deletedChat.id));
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    };
+
+    const cleanup = setupRealtime();
+    return () => {
+      cleanup.then((fn) => fn && fn());
+    }
+  }, [supabase]);
+
   const createNewChat = async () => {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;

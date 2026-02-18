@@ -18,21 +18,36 @@ export async function generateChatTitle(content: string): Promise<string | null>
       messages: [
         {
           role: "system",
-          content: "Generate a chat title in 3-5 words based on the user's message. Output ONLY the title, no quotes."
+          content: "You are a title generator. Output ONLY a 2-5 word topic label. Do not answer the question. Do not use full sentences. Do not use punctuation."
         },
         {
           role: "user",
-          content: content
+          content: `Message: Jelaskan teori relativitas einstein
+Title: Teori Relativitas
+Message: ${content}
+Title:`
         }
       ],
-      model: "llama3-8b-8192",
-      temperature: 0.5,
-      max_tokens: 20,
+      model: "llama-3.1-8b-instant",
+      temperature: 0.1,
+      max_tokens: 10,
     });
 
     const title = completion.choices[0]?.message?.content?.trim();
     if (title) {
-      return title.replace(/^["']|["']$/g, '');
+      // 1. Clean markdown and special chars
+      let clean = title.replace(/["'*_#`:.-]/g, '').trim();
+
+      // 2. Remove "Title:" prefix if model hallucinates it
+      clean = clean.replace(/^Title:\s*/i, "");
+
+      // 3. Force max 5 words
+      const words = clean.split(/\s+/);
+      if (words.length > 5) {
+        clean = words.slice(0, 5).join(" ");
+      }
+
+      return clean;
     }
   } catch (error) {
     console.error("Error generating title with Groq:", error);

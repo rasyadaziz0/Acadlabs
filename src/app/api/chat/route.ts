@@ -83,18 +83,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User message empty" }, { status: 400 });
     }
 
-    // 4. Auto Title (Fire & Forget)
+    // 4. Auto Title (Ensure Completion)
     if (chatId && validMessages.length === 1 && validMessages[0].role === "user") {
       const first = validMessages[0].content;
-      (async () => {
-        await new Promise(r => setTimeout(r, 100));
-        try {
-          const t = await generateChatTitle(first);
-          if (t) await supabase.from("chats").update({ title: t }).eq("id", chatId);
-        } catch (e) {
-          console.error("Auto title error", e);
+      try {
+        const t = await generateChatTitle(first);
+        if (t) {
+          await supabase.from("chats").update({ title: t }).eq("id", chatId);
         }
-      })();
+      } catch (e) {
+        console.error("Auto title error", e);
+      }
     }
 
     // 5. Formatter
