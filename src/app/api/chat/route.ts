@@ -7,6 +7,7 @@ import { trimMessagesForBudget } from "@/lib/token-utils";
 import Groq from "groq-sdk";
 import { rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -150,6 +151,7 @@ Jika user bertanya yang tidak relevan dengan akademik, jawab sopan tapi arahkan 
     }
 
     // 8. Readable Stream Response
+    const assistantMessageId = randomUUID(); // Generate ID on server to sync with frontend
     const responseStream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
@@ -170,9 +172,10 @@ Jika user bertanya yang tidak relevan dengan akademik, jawab sopan tapi arahkan 
           controller.error(err);
         } finally {
           controller.close();
-          // 9. Save to DB
+          // 9. Save to DB using the PRE-GENERATED ID
           if (userId && chatId && fullContent.trim()) {
             await supabase.from("messages").insert({
+              id: assistantMessageId, // Use the same ID!
               role: "assistant",
               content: sanitizeAIText(fullContent),
               chat_id: chatId,
@@ -188,7 +191,8 @@ Jika user bertanya yang tidak relevan dengan akademik, jawab sopan tapi arahkan 
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
-        "X-Accel-Buffering": "no"
+        "X-Accel-Buffering": "no",
+        "X-Message-Id": assistantMessageId // Send ID to frontend
       }
     });
 

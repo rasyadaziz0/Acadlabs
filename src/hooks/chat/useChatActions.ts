@@ -66,7 +66,7 @@ export function useChatActions(
         }
     };
 
-    const processReader = async (reader: ReadableStreamDefaultReader<Uint8Array>, streamMessageId: string) => {
+    const processReader = async (reader: ReadableStreamDefaultReader<Uint8Array>, streamMessageId: string, chatIdToUse: string) => {
         const decoder = new TextDecoder();
         let buffer = "";
         let pendingChunk = "";
@@ -86,7 +86,19 @@ export function useChatActions(
                     if (chunk) {
                         setMessages(prev => {
                             const idx = prev.findIndex(m => m.id === streamMessageId);
-                            if (idx === -1) return prev;
+                            if (idx === -1) {
+                                // RESILIENCE: If message is missing (e.g. wiped by history sync), restore it!
+                                // We reconstruct a partial message so the stream can continue showing
+                                const restoredMsg: Message = {
+                                    id: streamMessageId,
+                                    role: "assistant",
+                                    content: chunk,
+                                    chat_id: chatIdToUse,
+                                    user_id: "",
+                                    created_at: new Date().toISOString()
+                                };
+                                return [...prev, restoredMsg];
+                            }
                             const next = [...prev];
                             next[idx] = { ...next[idx], content: next[idx].content + chunk } as Message;
                             return next;
@@ -131,7 +143,18 @@ export function useChatActions(
             if (pendingChunk) {
                 setMessages(prev => {
                     const idx = prev.findIndex(m => m.id === streamMessageId);
-                    if (idx === -1) return prev;
+                    if (idx === -1) {
+                        // Resilience for final chunk too
+                        const restoredMsg: Message = {
+                            id: streamMessageId,
+                            role: "assistant",
+                            content: pendingChunk,
+                            chat_id: chatIdToUse,
+                            user_id: "",
+                            created_at: new Date().toISOString()
+                        };
+                        return [...prev, restoredMsg];
+                    }
                     const next = [...prev];
                     next[idx] = { ...next[idx], content: next[idx].content + pendingChunk } as Message;
                     return next;
@@ -282,13 +305,25 @@ export function useChatActions(
 
             if (!response.body) throw new Error("No response body");
 
+            // SYNC ID: Get the server-generated ID
+            const serverMessageId = response.headers.get("X-Message-Id");
+            let finalStreamId = streamMessageId;
+
+            if (serverMessageId) {
+                finalStreamId = serverMessageId;
+                setStreamingAssistantId(serverMessageId); // Update state ref
+                // Update the placeholder message with the real ID to prevent duplicates
+                setMessages(prev => prev.map(m => m.id === streamMessageId ? { ...m, id: serverMessageId } : m));
+            }
+
             const reader = response.body.getReader();
-            await processReader(reader, streamMessageId);
+            await processReader(reader, finalStreamId, currentChatId!);
 
         } catch (e: any) {
             console.error(e);
             toast.error("Gagal mengirim pesan: " + e.message);
-            setMessages(prev => prev.filter(m => m.id !== streamMessageId));
+            // Cleanup based on current known ID
+            setMessages(prev => prev.filter(m => m.id !== streamMessageId && m.id !== streamingAssistantId));
         } finally {
             setIsLoading(false);
             setIsStreaming(false);
@@ -353,7 +388,7 @@ export function useChatActions(
             if (!response.body) throw new Error("No response body");
 
             const reader = response.body.getReader();
-            await processReader(reader, streamMessageId);
+            await processReader(reader, streamMessageId, chatId!);
 
         } catch (e: any) {
             console.error(e);
