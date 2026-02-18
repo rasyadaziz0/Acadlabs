@@ -105,9 +105,9 @@ function ChatMessage({ message, showCaret = false, isStreaming = false, chatTitl
 
             {/* User Message */}
             {message.role === "user" && (
-              <div className="flex flex-col items-end max-w-[85%] sm:max-w-[70%]">
+              <div className="flex flex-col items-end max-w-[85%] sm:max-w-[70%] group">
                 {(cleanContent || isEditing) && (
-                  <div className="bg-zinc-200 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-50 px-4 py-2.5 rounded-2xl shadow-sm relative group w-fit">
+                  <div className="bg-zinc-200 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-50 px-4 py-2.5 rounded-2xl shadow-sm relative w-fit">
                     {!isEditing ? (
                       <div className="text-[14px] sm:text-[15px] leading-relaxed break-words whitespace-pre-wrap">
                         <MarkdownRenderer content={cleanContent} role={message.role} isStreaming={isStreaming} />
