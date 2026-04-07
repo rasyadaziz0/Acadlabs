@@ -41,6 +41,25 @@ const nextConfig: NextConfig = {
         destination: "/favicon-black.ico",
         permanent: true,
       },
+      // CLI installation script redirects
+      {
+        source: "/install.sh",
+        destination:
+          "https://raw.githubusercontent.com/Acadgacor/Acadlabs-CLI/main/install.sh",
+        permanent: false,
+      },
+      {
+        source: "/install.ps1",
+        destination:
+          "https://raw.githubusercontent.com/Acadgacor/Acadlabs-CLI/main/install.ps1",
+        permanent: false,
+      },
+      {
+        source: "/install.cmd",
+        destination:
+          "https://raw.githubusercontent.com/Acadgacor/Acadlabs-CLI/main/install.cmd",
+        permanent: false,
+      },
     ];
   },
   async headers() {
