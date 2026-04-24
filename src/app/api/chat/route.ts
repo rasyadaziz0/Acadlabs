@@ -56,13 +56,15 @@ export async function POST(request: NextRequest) {
 
     // 3. Supabase & User
     const supabase = await createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const userId = user?.id;
-    if (!userId) {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || "Teman";
+    const userId = user.id;
+    const userName = user.user_metadata?.full_name || user.user_metadata?.name || "Teman";
 
     const groqKeys = getGroqKeys();
     if (groqKeys.length === 0) {
