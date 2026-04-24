@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { solveMathAction } from "@/app/actions/ai";
+
 export type SolveOpts = {
   conversationId?: string;
   client_generated_id?: string;
@@ -41,23 +43,15 @@ export function useMathSolver(): UseMathSolver {
     setSolution("");
 
     try {
-      const res = await fetch("/api/math", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, stream: false, conversationId: opts?.conversationId, client_generated_id: opts?.client_generated_id }),
-        signal: ac.signal,
-      });
-      if (!res.ok) {
-        let message = `HTTP ${res.status}`;
-        try {
-          const j = await res.json();
-          message = j?.error?.message || j?.error || message;
-        } catch {}
-        throw new Error(message);
+      // Use Server Action instead of fetch API route
+      // The prompt is now handled on the server side in solveMathAction
+      const result = await solveMathAction(q);
+
+      if (!result.success) {
+        throw new Error(result.error || "Gagal memproses");
       }
-      const data = (await res.json()) as { answer?: string };
-      const ans = String(data?.answer ?? "");
-      setSolution(ans);
+
+      setSolution(result.data!);
     } catch (e: any) {
       if (e?.name === "AbortError") return; // Silent on abort
       setError(e?.message || "Gagal memproses");

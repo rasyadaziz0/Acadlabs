@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
+import { analyzeImageAction } from "@/app/actions/ai";
+
 type AnalyzeResponse =
   | {
       ok: true;
@@ -44,16 +46,19 @@ export default function ImageUpload({ className }: { className?: string }) {
       fd.append("image", file);
       fd.append("refine", String(refine));
 
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        body: fd,
-      });
+      const response = await analyzeImageAction(fd);
 
-      const data: AnalyzeResponse = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(("error" in data ? data.error : "Gagal analisis") || "Gagal analisis");
+      if (!response.success) {
+        throw new Error(response.error || "Gagal analisis");
       }
-      setResult(data);
+
+      setResult({
+        ok: true,
+        gemini: response.gemini!,
+        refined: response.refined,
+        model: response.model!,
+        meta: response.meta!,
+      });
     } catch (err: any) {
       setError(err?.message || "Terjadi kesalahan.");
     } finally {

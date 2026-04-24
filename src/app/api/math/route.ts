@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sanitizeUserText, sanitizeAIText, normalizeWhitespaceKeepEdges } from "@/lib/sanitize";
+import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
+import { hasPersistentRateLimitBackend, rateLimit } from "@/lib/rate-limit";
 import {
-  ChatRole,
   ChatMessage,
-  GroqChatRequest,
   getGroqKeys,
   callGroqWithFallback,
 } from "@/lib/ai-service";
@@ -29,13 +29,62 @@ function isChatMessage(val: unknown): val is ChatMessage {
   );
 }
 
+function sanitizeSseDataPayload(data: string): string {
+  if (data === "[DONE]") return data;
+  try {
+    const obj = JSON.parse(data);
+    const choice = obj?.choices?.[0];
+    if (choice?.delta && typeof choice.delta.content === "string") {
+      choice.delta.content = sanitizeAIText(choice.delta.content);
+    }
+    if (typeof choice?.text === "string") {
+      choice.text = sanitizeAIText(choice.text);
+    }
+    return JSON.stringify(obj);
+  } catch {
+    return data;
+  }
+}
+
+function parseAndSanitizeSseEvent(rawEventBlock: string): string {
+  const dataLines = rawEventBlock
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart());
+
+  if (dataLines.length === 0) return "";
+  const payload = dataLines.join("\n").trim();
+  if (!payload) return "";
+
+  const sanitizedPayload = sanitizeSseDataPayload(payload);
+  return `data: ${sanitizedPayload}\n\n`;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const contentType = request.headers.get("content-type") || "";
     const accept = request.headers.get("accept") || "";
     const wantsSSE = /text\/event-stream/i.test(accept);
 
-    let bodyJson: any = {};
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!hasPersistentRateLimitBackend()) {
+      return NextResponse.json({ error: "Rate limiter backend belum dikonfigurasi" }, { status: 503 });
+    }
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+    const { success } = await rateLimit(`math:${user.id}:${ip}`);
+    if (!success) {
+      return NextResponse.json(
+        { error: "Terlalu banyak request. Coba lagi beberapa saat." },
+        { status: 429 }
+      );
+    }
+
+    let bodyJson: Record<string, unknown> = {};
     try {
       bodyJson = await request.json();
     } catch {
@@ -50,6 +99,7 @@ export async function POST(request: NextRequest) {
     if (getGroqKeys().length === 0) {
       return NextResponse.json({ error: "Mohon Maaf, Server sedang down" }, { status: 500 });
     }
+    console.info("usage:math", { userId: user.id, stream });
 
     const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
     const MAX_OUTPUT_TOKENS = Number(process.env.GROQ_MAX_TOKENS) || 4048;
@@ -84,18 +134,8 @@ export async function POST(request: NextRequest) {
 
       if (!upstream.ok) {
         const errorText = await upstream.text();
-        try {
-          const json = JSON.parse(errorText);
-          return NextResponse.json(
-            { error: json?.error?.message || json?.message || "API error" },
-            { status: upstream.status }
-          );
-        } catch {
-          return NextResponse.json(
-            { error: errorText || "API error" },
-            { status: upstream.status }
-          );
-        }
+        console.error("Math upstream error (non-stream)", { status: upstream.status, body: errorText });
+        return NextResponse.json({ error: "AI service unavailable" }, { status: upstream.status });
       }
 
       const json = await upstream.json();
@@ -138,18 +178,8 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      try {
-        const json = JSON.parse(errorText);
-        return NextResponse.json(
-          { error: json?.error?.message || json?.message || "API error" },
-          { status: response.status }
-        );
-      } catch {
-        return NextResponse.json(
-          { error: errorText || "API error" },
-          { status: response.status }
-        );
-      }
+      console.error("Math upstream error (stream)", { status: response.status, body: errorText });
+      return NextResponse.json({ error: "AI service unavailable" }, { status: response.status });
     }
 
     const headers = new Headers({
@@ -159,84 +189,45 @@ export async function POST(request: NextRequest) {
       "X-Accel-Buffering": "no",
     });
 
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
     const upstream = response.body;
     if (!upstream) {
       return NextResponse.json({ error: "Upstream stream missing" }, { status: 502 });
     }
 
-    const streamResp = new ReadableStream<Uint8Array>({
-      start: async (controller) => {
-        const reader = upstream.getReader();
-        let buffer = "";
-        const keepAliveMs = Number(process.env.SSE_KEEPALIVE_MS) || 15000;
-        const sendKeepAlive = () => {
-          try { controller.enqueue(encoder.encode(": keep-alive\n\n")); } catch { }
-        };
-        try { controller.enqueue(encoder.encode(`retry: ${keepAliveMs}\n\n`)); } catch { }
-        sendKeepAlive();
-        const abortHandler = () => { try { reader.cancel(); } catch { } };
-        try { request.signal.addEventListener("abort", abortHandler); } catch { }
-        let keepAliveTimer: ReturnType<typeof setInterval> = setInterval(sendKeepAlive, keepAliveMs);
-        let sawDone = false;
-        try {
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            if (value) buffer += decoder.decode(value, { stream: true });
+    let sseBuffer = "";
+    const streamResp = upstream
+      .pipeThrough(new TextDecoderStream())
+      .pipeThrough(
+        new TransformStream<string, string>({
+          transform(chunk, controller) {
+            sseBuffer += chunk.replace(/\r\n/g, "\n");
 
-            let idx: number;
-            while ((idx = buffer.indexOf("\n\n")) !== -1) {
-              const rawEvent = buffer.slice(0, idx);
-              buffer = buffer.slice(idx + 2);
+            let idx = sseBuffer.indexOf("\n\n");
+            while (idx !== -1) {
+              const rawEventBlock = sseBuffer.slice(0, idx);
+              sseBuffer = sseBuffer.slice(idx + 2);
 
-              const lines = rawEvent.split("\n");
-              for (const line of lines) {
-                if (!line.startsWith("data:")) continue;
-                const data = line.slice(5).trim();
-                if (!data) continue;
-                if (data === "[DONE]") {
-                  controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-                  sawDone = true;
-                  break;
-                }
-                try {
-                  const obj = JSON.parse(data);
-                  const choice = obj?.choices?.[0];
-                  if (choice && choice.delta && typeof choice.delta.content === "string") {
-                    choice.delta.content = sanitizeAIText(choice.delta.content);
-                  }
-                  if (choice && typeof choice.text === "string") {
-                    choice.text = sanitizeAIText(choice.text);
-                  }
-                  const out = `data: ${JSON.stringify(obj)}\n\n`;
-                  controller.enqueue(encoder.encode(out));
-                } catch {
-                  controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-                }
-              }
-              if (sawDone) break;
+              const parsed = parseAndSanitizeSseEvent(rawEventBlock);
+              if (parsed) controller.enqueue(parsed);
+
+              idx = sseBuffer.indexOf("\n\n");
             }
-            if (sawDone) break;
-          }
-        } catch {
-          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'stream_error' })}\n\n`)); } catch { }
-        } finally {
-          try { clearInterval(keepAliveTimer); } catch { }
-          try { request.signal.removeEventListener("abort", abortHandler); } catch { }
-          try { controller.close(); } catch { }
-          try { await reader.cancel(); } catch { }
-        }
-      },
-    });
+          },
+          flush(controller) {
+            const remainder = sseBuffer.trim();
+            if (!remainder) return;
+            const parsed = parseAndSanitizeSseEvent(remainder);
+            if (parsed) controller.enqueue(parsed);
+          },
+        })
+      )
+      .pipeThrough(new TextEncoderStream());
 
     return new Response(streamResp, { status: 200, headers });
   } catch (error: unknown) {
     console.error("Math API error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to process math request";
     return NextResponse.json(
-      { error: { message: errorMessage } },
+      { error: { message: "Internal Server Error" } },
       { status: 500 }
     );
   }

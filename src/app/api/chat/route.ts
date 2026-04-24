@@ -1,4 +1,3 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 import { sanitizeUserText, sanitizeAIText, normalizeWhitespaceKeepEdges } from "@/lib/sanitize";
 import { generateChatTitle } from "@/lib/title";
@@ -8,6 +7,7 @@ import Groq from "groq-sdk";
 import { rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,18 +55,13 @@ export async function POST(request: NextRequest) {
     const { messages, searchResults, chatId } = validation.data;
 
     // 3. Supabase & User
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name) { return request.cookies.get(name)?.value; },
-        },
-      }
-    );
+    const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     const userId = user?.id;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || "Teman";
 
     const groqKeys = getGroqKeys();
@@ -74,6 +69,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No API Keys configured" }, { status: 500 });
     }
     const apiKey = groqKeys[Math.floor(Math.random() * groqKeys.length)];
+    if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
+      console.error("Invalid Groq API key selected");
+      return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+    }
     const groq = new Groq({ apiKey });
 
     // Filter empty user messages
@@ -83,6 +82,7 @@ export async function POST(request: NextRequest) {
     if (!hasUserMessage) {
       return NextResponse.json({ error: "User message empty" }, { status: 400 });
     }
+    console.info("usage:chat", { userId, chatId: chatId ?? null, messageCount: validMessages.length });
 
     // 4. Auto Title (Ensure Completion)
     if (chatId && validMessages.length === 1 && validMessages[0].role === "user") {
@@ -198,6 +198,6 @@ Jika user bertanya yang tidak relevan dengan akademik, jawab sopan tapi arahkan 
 
   } catch (err: any) {
     console.error("API Panic:", err);
-    return NextResponse.json({ error: err.message || "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

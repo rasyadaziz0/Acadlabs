@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { createServerClient } from "@supabase/ssr";
 import Groq from "groq-sdk";
 import { getGroqKeys } from "@/lib/ai-service";
-import { sanitizeAIText } from "@/lib/sanitize";
+import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,12 +25,11 @@ async function fileToGenerativePart(file: File) {
 export async function POST(req: NextRequest) {
   try {
     // 1. Auth Check
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { get(name) { return req.cookies.get(name)?.value; } } }
-    );
+    const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     // 2. Parsers
     const formData = await req.formData();
@@ -71,6 +69,11 @@ export async function POST(req: NextRequest) {
     const groqKeys = getGroqKeys();
     if (groqKeys.length === 0) return NextResponse.json({ error: "Server AI Config Error (Groq)" }, { status: 500 });
     const apiKey = groqKeys[Math.floor(Math.random() * groqKeys.length)];
+    if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
+      console.error("Invalid Groq API key selected");
+      return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+    }
+    console.info("usage:math-upload", { userId: user.id, fileSize: file.size, mimeType: file.type });
     const groq = new Groq({ apiKey });
 
     const systemPrompt = `
@@ -140,7 +143,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("Math Solver Pipeline Error:", error);
     return NextResponse.json({
-      error: error.message || "Failed to process math problem"
+      error: "Internal Server Error"
     }, { status: 500 });
   }
 }

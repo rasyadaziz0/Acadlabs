@@ -2,16 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { validatePassword } from "@/lib/password-validator";
 import { sanitizeEmail, isValidEmail } from "@/lib/sanitize";
-
-// Simple in-memory rate limit (per-IP). Not bulletproof, but helps reduce abuse.
-declare global {
-  // eslint-disable-next-line no-var
-  var __registerRateMap: Map<string, number[]> | undefined;
-}
-const rateMap: Map<string, number[]> = globalThis.__registerRateMap || new Map();
-globalThis.__registerRateMap = rateMap;
-const RATE_LIMIT = 5; // requests
-const RATE_WINDOW_MS = 60_000; // 1 minute
+import { hasPersistentRateLimitBackend, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,17 +27,19 @@ export async function POST(request: NextRequest) {
 
     // Apply rate limit before heavy checks
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-    const now = Date.now();
-    const arr = rateMap.get(ip) || [];
-    const recent = arr.filter((t) => now - t < RATE_WINDOW_MS);
-    if (recent.length >= RATE_LIMIT) {
+    if (!hasPersistentRateLimitBackend()) {
+      return NextResponse.json(
+        { error: "Rate limiter backend belum dikonfigurasi" },
+        { status: 503 }
+      );
+    }
+    const { success } = await rateLimit(`auth-register:${ip}`);
+    if (!success) {
       return NextResponse.json(
         { error: "Terlalu banyak percobaan. Coba lagi beberapa saat." },
         { status: 429 }
       );
     }
-    recent.push(now);
-    rateMap.set(ip, recent);
 
     // Verify Turnstile token
     const turnstileSecret = process.env.CLOUDFLARE_SECRET_KEY;

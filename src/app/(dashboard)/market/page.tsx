@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, BarChart3, AlertCircle, LineChart, Search } from "lucide-react";
+import { TrendingUp, BarChart3, AlertCircle,  Search } from "lucide-react";
 import MarkdownRenderer from "@/components/chat/markdown/MarkdownRenderer";
 import dynamic from "next/dynamic";
 

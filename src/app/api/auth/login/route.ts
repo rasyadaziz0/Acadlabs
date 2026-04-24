@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sanitizeEmail, isValidEmail } from "@/lib/sanitize";
-
-// Simple in-memory rate limit (per-IP)
-declare global {
-  // eslint-disable-next-line no-var
-  var __loginRateMap: Map<string, number[]> | undefined;
-}
-const rateMap: Map<string, number[]> = globalThis.__loginRateMap || new Map();
-globalThis.__loginRateMap = rateMap;
-const RATE_LIMIT = 10; // requests
-const RATE_WINDOW_MS = 60_000; // 1 minute
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,17 +26,13 @@ export async function POST(request: NextRequest) {
 
     // Rate limit early
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-    const now = Date.now();
-    const arr = rateMap.get(ip) || [];
-    const recent = arr.filter((t) => now - t < RATE_WINDOW_MS);
-    if (recent.length >= RATE_LIMIT) {
+    const { success } = await rateLimit(`auth-login:${ip}`);
+    if (!success) {
       return NextResponse.json(
         { error: "Terlalu banyak percobaan. Coba lagi beberapa saat." },
         { status: 429 }
       );
     }
-    recent.push(now);
-    rateMap.set(ip, recent);
 
     // Verify Turnstile
     const turnstileSecret = process.env.CLOUDFLARE_SECRET_KEY;

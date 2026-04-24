@@ -1,5 +1,7 @@
 "use client";
 
+import { analyzeImageAction } from "@/app/actions/ai";
+
 export type ClientAnalysisSource = "gemini" | "gpt-oss";
 export type ClientAnalysisResult = {
   source: ClientAnalysisSource;
@@ -12,15 +14,16 @@ export async function processWithGemini(file: File, refine = false): Promise<Cli
   fd.append("image", file);
   fd.append("refine", String(!!refine));
 
-  const res = await fetch("/api/analyze", { method: "POST", body: fd });
-  const data = await res.json();
-  if (!res.ok || !data?.ok) {
-    throw new Error((data && (data.error || data.message)) || "Gagal analisis gambar");
+  const response = await analyzeImageAction(fd);
+  
+  if (!response.success) {
+    throw new Error(response.error || "Gagal analisis gambar");
   }
+
   return {
     source: "gemini",
-    content: refine && data.refined ? data.refined : data.gemini,
-    meta: { model: data.model, file: data.meta },
+    content: refine && response.refined ? response.refined : response.gemini!,
+    meta: { model: response.model, file: response.meta },
   };
 }
 

@@ -1,11 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { kv } from "@vercel/kv";
 
-// Generic interface for our rate limiter
-type RateLimitContext = {
-    ip: string;
-};
-
 type RateLimitResult = {
     success: boolean;
     limit: number;
@@ -15,17 +10,44 @@ type RateLimitResult = {
 
 // In-memory fallback if Redis/KV is not configured
 const cache = new Map<string, { count: number; reset: number }>();
+let ratelimitSingleton: Ratelimit | null = null;
+
+function hasRatelimitEnv() {
+    return Boolean(
+        (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) ||
+        (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
+    );
+}
+
+export function hasPersistentRateLimitBackend() {
+    return hasRatelimitEnv();
+}
+
+function ensureKvEnvAlias() {
+    if (!process.env.KV_REST_API_URL && process.env.UPSTASH_REDIS_REST_URL) {
+        process.env.KV_REST_API_URL = process.env.UPSTASH_REDIS_REST_URL;
+    }
+    if (!process.env.KV_REST_API_TOKEN && process.env.UPSTASH_REDIS_REST_TOKEN) {
+        process.env.KV_REST_API_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+    }
+}
+
+function getRatelimit() {
+    if (ratelimitSingleton) return ratelimitSingleton;
+    ensureKvEnvAlias();
+    ratelimitSingleton = new Ratelimit({
+        redis: kv,
+        limiter: Ratelimit.slidingWindow(10, "60 s"), // 10 requests per minute
+        analytics: true,
+        prefix: "@upstash/ratelimit",
+    });
+    return ratelimitSingleton;
+}
 
 export async function rateLimit(identifier: string): Promise<RateLimitResult> {
     // If we have KV/Redis credentials, use Upstash
-    if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-        const ratelimit = new Ratelimit({
-            redis: kv,
-            limiter: Ratelimit.slidingWindow(10, "60 s"), // 10 requests per minute
-            analytics: true,
-            prefix: "@upstash/ratelimit",
-        });
-
+    if (hasRatelimitEnv()) {
+        const ratelimit = getRatelimit();
         const { success, limit, remaining, reset } = await ratelimit.limit(identifier);
         return { success, limit, remaining, reset };
     }
@@ -35,6 +57,13 @@ export async function rateLimit(identifier: string): Promise<RateLimitResult> {
     const window = 60 * 1000;
     const now = Date.now();
     const key = identifier;
+
+    // Lightweight cleanup so fallback map does not grow forever in long-lived runtimes.
+    if (cache.size > 10_000) {
+        for (const [k, v] of cache) {
+            if (now > v.reset) cache.delete(k);
+        }
+    }
 
     let record = cache.get(key);
 
