@@ -24,6 +24,38 @@ const ChatRequestSchema = z.object({
   chatId: z.string().optional(),
 });
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function insertAssistantMessageWithRetry(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  payload: {
+    id: string;
+    role: "assistant";
+    content: string;
+    chat_id: string;
+    user_id: string;
+  },
+  maxAttempts = 3
+) {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const { error } = await supabase.from("messages").insert(payload);
+      if (!error) return { ok: true as const };
+      lastError = error;
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt < maxAttempts) {
+      await delay(attempt * 300);
+    }
+  }
+
+  return { ok: false as const, error: lastError };
+}
+
 export async function POST(request: NextRequest) {
   try {
     // 1. Rate Limiting
@@ -158,6 +190,7 @@ Jika user bertanya yang tidak relevan dengan akademik, jawab sopan tapi arahkan 
       async start(controller) {
         const encoder = new TextEncoder();
         let fullContent = "";
+        let streamFailed = false;
 
         try {
           for await (const chunk of stream) {
@@ -168,22 +201,37 @@ Jika user bertanya yang tidak relevan dengan akademik, jawab sopan tapi arahkan 
               controller.enqueue(encoder.encode(sse));
             }
           }
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         } catch (err) {
+          streamFailed = true;
           console.error("Stream error", err);
           controller.error(err);
         } finally {
-          controller.close();
+          if (streamFailed) {
+            return;
+          }
+
           // 9. Save to DB using the PRE-GENERATED ID
           if (userId && chatId && fullContent.trim()) {
-            await supabase.from("messages").insert({
+            const persistResult = await insertAssistantMessageWithRetry(supabase, {
               id: assistantMessageId, // Use the same ID!
               role: "assistant",
               content: sanitizeAIText(fullContent),
               chat_id: chatId,
               user_id: userId
             });
+
+            if (!persistResult.ok) {
+              console.error("Assistant message persistence failed after retries", {
+                assistantMessageId,
+                chatId,
+                userId,
+                error: persistResult.error
+              });
+            }
           }
+
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
         }
       }
     });

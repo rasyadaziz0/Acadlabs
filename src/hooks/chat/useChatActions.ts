@@ -223,18 +223,7 @@ export function useChatActions(
         setIsLoading(true);
         setIsStreaming(true);
 
-        // Prep Stream Placeholder
-        const streamMessageId = crypto.randomUUID();
-        const assistantPlaceholder: Message = {
-            id: streamMessageId,
-            role: "assistant",
-            content: "",
-            chat_id: currentChatId!,
-            user_id: userData.user.id,
-            created_at: new Date().toISOString(),
-        };
-        setStreamingAssistantId(streamMessageId);
-        setMessages(prev => clampLastNMessages([...prev, assistantPlaceholder], HISTORY_LIMIT));
+        let streamMessageId: string | null = null;
 
         try {
             // Search
@@ -281,6 +270,19 @@ export function useChatActions(
                 setMessages(prev => prev.map(m => m.id === tempId ? savedUserMsg as Message : m));
             }
 
+            // Create assistant placeholder after user message is persisted to keep chronological order stable.
+            streamMessageId = crypto.randomUUID();
+            const assistantPlaceholder: Message = {
+                id: streamMessageId,
+                role: "assistant",
+                content: "",
+                chat_id: currentChatId!,
+                user_id: userData.user.id,
+                created_at: new Date().toISOString(),
+            };
+            setStreamingAssistantId(streamMessageId);
+            setMessages(prev => clampLastNMessages([...prev, assistantPlaceholder], HISTORY_LIMIT));
+
             // Call Chat API with Streaming
             const response = await fetch("/api/chat", {
                 method: "POST",
@@ -307,7 +309,7 @@ export function useChatActions(
 
             // SYNC ID: Get the server-generated ID
             const serverMessageId = response.headers.get("X-Message-Id");
-            let finalStreamId = streamMessageId;
+            let finalStreamId = streamMessageId!;
 
             if (serverMessageId) {
                 finalStreamId = serverMessageId;
