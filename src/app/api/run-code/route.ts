@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
+import { hasPersistentRateLimitBackend, rateLimit } from "@/lib/rate-limit";
 
 // Konfigurasi untuk menangani permintaan dengan ukuran lebih besar
 export const config = {
@@ -20,6 +21,20 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!hasPersistentRateLimitBackend()) {
+      return NextResponse.json(
+        { error: "Rate limiter backend belum dikonfigurasi" },
+        { status: 503 }
+      );
+    }
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+    const { success } = await rateLimit(`run-code:${user.id}:${ip}`);
+    if (!success) {
+      return NextResponse.json(
+        { error: "Terlalu banyak request. Coba lagi beberapa saat." },
+        { status: 429 }
+      );
     }
 
     const { source_code, language_id } = await request.json();

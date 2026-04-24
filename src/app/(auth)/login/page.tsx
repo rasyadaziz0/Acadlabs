@@ -158,7 +158,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => signInWithProvider("google")}
-              disabled={loading || !turnstileToken}
+              disabled={loading}
               className="w-full h-11 rounded-full border flex items-center justify-center gap-2 hover:bg-muted transition"
             >
               <Image src="https://cdn1.iconfinder.com/data/icons/google-s-logo/150/Google_Icons-09-512.png" width={20} height={20} alt="Google" unoptimized />
@@ -167,7 +167,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => signInWithProvider("github")}
-              disabled={loading || !turnstileToken}
+              disabled={loading}
               className="w-full h-11 rounded-full border flex items-center justify-center gap-2 hover:bg-muted transition"
             >
               <Github className="h-4 w-4" />

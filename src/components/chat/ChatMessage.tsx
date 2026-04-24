@@ -87,7 +87,7 @@ function ChatMessage({ message, showCaret = false, isStreaming = false, chatTitl
     const clean = sanitizeUserText(draft || "").trim();
     const newContent = clean;
     try {
-      const updated = await updateMessageContent(message.id, message.user_id, newContent);
+      const updated = await updateMessageContent(message.id, newContent);
       onMessageUpdated?.(updated as Message);
       onResend?.(updated as Message);
       setIsEditing(false);

@@ -61,8 +61,11 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
     );
 
     return (
-        <div className="flex flex-col h-full relative" id="app-scroll">
-            <div className="flex-1 overflow-y-auto w-full pb-[9rem]" id="app-scroll">
+        <div className="flex flex-col h-full relative">
+            <div
+                className="flex-1 overflow-y-auto w-full"
+                style={{ paddingBottom: `${Math.max(inputHeight + 24, 180)}px` }}
+            >
                 <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
                     {messages.length === 0 && !isLoadingMessages ? (
                         <EmptyState setInput={setInput} />
@@ -110,7 +113,7 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
 
             <div
                 ref={inputContainerRef}
-                className="fixed bottom-0 z-20 w-full bg-gradient-to-t from-background via-background/90 to-transparent pt-6 pb-2 px-4 md:left-64 md:w-[calc(100%-16rem)]"
+                className="sticky bottom-0 z-20 w-full bg-gradient-to-t from-background via-background/90 to-transparent pt-6 pb-2 px-4"
             >
                 <div className="max-w-3xl mx-auto space-y-4">
                     <AiInput

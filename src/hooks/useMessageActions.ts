@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { toast } from "sonner";
-import { sanitizeUserText } from "@/lib/sanitize";
 
 export function useMessageActions() {
     const [saving, setSaving] = useState(false);
@@ -17,12 +16,12 @@ export function useMessageActions() {
         []
     );
 
-    const updateMessageContent = async (messageId: string, userId: string, content: string) => {
+    const updateMessageContent = async (messageId: string, content: string) => {
         try {
             setSaving(true);
             const { data: userData } = await supabase.auth.getUser();
-            if (!userData?.user || userData.user.id !== userId) {
-                throw new Error("Tidak bisa mengedit pesan ini");
+            if (!userData?.user) {
+                throw new Error("Unauthorized");
             }
 
             const { data: updated, error } = await supabase

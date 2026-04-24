@@ -13,23 +13,37 @@ export type Message = {
   attachment_type?: string | null;
 };
 
-export function useRealtimeMessages(chatId?: string | null, userId?: string | null) {
+export function useRealtimeMessages(chatId?: string | null) {
   const supabase = createSupabaseClient();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadAuthUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!active) return;
+      setCurrentUserId(data.user?.id ?? null);
+    };
+    loadAuthUser();
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
 
   // Initial fetch when both chatId and userId are available
   useEffect(() => {
     let active = true;
     const run = async () => {
-      if (!chatId || !userId) return;
+      if (!chatId || !currentUserId) return;
       setLoading(true);
       const { data, error } = await supabase
         .from("messages")
         .select("*")
         .eq("chat_id", chatId)
-        .eq("user_id", userId)
+        .eq("user_id", currentUserId)
         .order("created_at", { ascending: true });
       if (error) {
         console.error("Initial fetch error:", error.message);
@@ -42,11 +56,11 @@ export function useRealtimeMessages(chatId?: string | null, userId?: string | nu
     return () => {
       active = false;
     };
-  }, [chatId, userId, supabase]);
+  }, [chatId, currentUserId, supabase]);
 
   // Realtime subscription for INSERT events on this chat
   useEffect(() => {
-    if (!chatId || !userId) return;
+    if (!chatId || !currentUserId) return;
     const channel = supabase
       .channel(`realtime:messages:${chatId}`)
       .on(
@@ -54,7 +68,7 @@ export function useRealtimeMessages(chatId?: string | null, userId?: string | nu
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
         (payload) => {
           const row = payload.new as Message;
-          if (!row || row.user_id !== userId) return;
+          if (!row || row.user_id !== currentUserId) return;
           setMessages((prev) => {
             const exists = prev.some((m) => m.id === row.id);
             const next = exists ? prev : [...prev, row];
@@ -70,11 +84,11 @@ export function useRealtimeMessages(chatId?: string | null, userId?: string | nu
       if (channelRef.current) supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     };
-  }, [chatId, userId, supabase]);
+  }, [chatId, currentUserId, supabase]);
 
   const sendMessage = useCallback(
     async (contentRaw: string) => {
-      if (!chatId || !userId) throw new Error("Missing chatId or userId");
+      if (!chatId || !currentUserId) throw new Error("Missing chatId or authenticated user");
       const content = sanitizeUserText(contentRaw || "").trim();
       if (!content) return;
 
@@ -85,14 +99,14 @@ export function useRealtimeMessages(chatId?: string | null, userId?: string | nu
         role: "user",
         content,
         chat_id: chatId,
-        user_id: userId,
+        user_id: currentUserId,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, temp]);
 
       const { error } = await supabase
         .from("messages")
-        .insert({ role: "user", content, chat_id: chatId, user_id: userId });
+        .insert({ role: "user", content, chat_id: chatId, user_id: currentUserId });
 
       if (error) {
         // Rollback optimistic
@@ -103,7 +117,7 @@ export function useRealtimeMessages(chatId?: string | null, userId?: string | nu
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
     },
-    [chatId, userId, supabase]
+    [chatId, currentUserId, supabase]
   );
 
   return { messages, loading, sendMessage } as const;
