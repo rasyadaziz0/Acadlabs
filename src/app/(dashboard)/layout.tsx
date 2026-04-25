@@ -75,10 +75,9 @@ export default async function DashboardLayout({
       </Sidebar>
 
       <SidebarInset>
-        <div className="flex min-h-0 h-svh flex-1 flex-col">
+        <div className="flex min-h-0 h-svh flex-1 flex-col overflow-hidden">
           <Header />
-          {/* Pastikan main flex-1, min-h-0, dan overflow-y-auto */}
-          <main id="app-scroll" className="flex-1 min-h-0 h-full w-full overflow-y-auto">
+          <main id="app-scroll" className="flex-1 min-h-0 w-full overflow-hidden pt-16">
             {children}
           </main>
         </div>

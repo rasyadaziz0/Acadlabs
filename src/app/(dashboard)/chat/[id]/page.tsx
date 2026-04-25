@@ -5,5 +5,9 @@ import ChatInterface from "@/components/chat/ChatInterface";
 
 export default function ChatIdPage() {
   const { id } = useParams<{ id: string }>();
-  return <ChatInterface initialChatId={id} />;
+  return (
+    <div className="h-full overflow-hidden">
+      <ChatInterface initialChatId={id} />
+    </div>
+  );
 }

@@ -186,6 +186,22 @@
   .dark *::-webkit-scrollbar-thumb {
     background-color: color-mix(in oklch, var(--foreground) 40%, transparent);
   }
+
+  /* Hide scrollbar specifically for chat message viewport */
+  .chat-scroll-area [data-slot="scroll-area-viewport"] {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .chat-scroll-area [data-slot="scroll-area-viewport"]::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .chat-scroll-area [data-slot="scroll-area-scrollbar"] {
+    display: none !important;
+  }
 }
 
 @layer utilities {
