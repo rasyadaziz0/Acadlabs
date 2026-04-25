@@ -31,8 +31,10 @@ export function CodeBlock(props: any & { isStreaming?: boolean }) {
   const lang = match?.[1]?.toLowerCase();
   const isMathLang = !!lang && ["math", "latex", "tex", "katex"].includes(lang);
   const isPlainLike = !!lang && ["plaintext", "text", "txt", "md", "markdown"].includes(lang);
+  const isSingleLine = !!rawCode && !/\n/.test(rawCode);
   const looksCodey = /[{};]|=>|\b(class|function|import|export)\b/.test(rawCode);
-  const shouldInlineTiny = !!rawCode && !/\n/.test(rawCode) && rawCode.length <= 40 && !looksCodey;
+  const shouldInlineTiny = isSingleLine && rawCode.length <= 40 && !looksCodey;
+  const shouldInlineShortBlock = isSingleLine && rawCode.length <= 60;
 
   if (inline) {
     return (
@@ -56,7 +58,7 @@ export function CodeBlock(props: any & { isStreaming?: boolean }) {
       if (!rawCode) return null;
       if (isStreaming) {
         return (
-          <pre className="my-2 whitespace-pre-wrap break-words text-sm bg-transparent px-0 py-0 overflow-x-auto max-w-full">{rawCode}</pre>
+          <pre className="my-2 inline-block align-top max-w-full whitespace-pre-wrap break-words text-sm bg-transparent px-0 py-0 overflow-x-auto">{rawCode}</pre>
         );
       }
       return (
@@ -72,7 +74,7 @@ export function CodeBlock(props: any & { isStreaming?: boolean }) {
         <code className="rounded-md border border-zinc-300/60 dark:border-zinc-700 bg-zinc-100 text-zinc-900 dark:bg-zinc-800/70 dark:text-zinc-100 px-1.5 py-0.5 text-[0.95em]">{decodeEntitiesMinimal(rawCode)}</code>
       );
     }
-    return <pre className="my-2 whitespace-pre-wrap break-words text-sm bg-transparent px-0 py-0">{decodeEntitiesMinimal(rawCode)}</pre>;
+    return <pre className="my-2 inline-block align-top max-w-full whitespace-pre-wrap break-words text-sm bg-transparent px-0 py-0 overflow-x-auto">{decodeEntitiesMinimal(rawCode)}</pre>;
   }
 
   if (isMathLang) {
@@ -95,15 +97,22 @@ export function CodeBlock(props: any & { isStreaming?: boolean }) {
 
   if (match && rawCode) {
     if (isPlainLike) {
+      if (shouldInlineShortBlock) {
+        return (
+          <code className="rounded-md border border-zinc-300/60 dark:border-zinc-700 bg-zinc-100 text-zinc-900 dark:bg-zinc-800/70 dark:text-zinc-100 px-1.5 py-0.5 text-[0.95em]">
+            {decodeEntitiesMinimal(rawCode)}
+          </code>
+        );
+      }
       return (
-        <pre className="my-3 whitespace-pre-wrap break-words text-sm bg-zinc-100 dark:bg-zinc-900/70 px-3 py-2 rounded-xl overflow-x-auto">
+        <pre className="my-3 inline-block align-top max-w-full whitespace-pre-wrap break-words text-sm bg-zinc-100 dark:bg-zinc-900/70 px-3 py-2 rounded-xl overflow-x-auto">
           {decodeEntitiesMinimal(rawCode)}
         </pre>
       );
     }
     if (isStreaming) {
       return (
-        <pre className="my-3 whitespace-pre-wrap break-words text-sm bg-zinc-100 dark:bg-zinc-900/70 px-3 py-2 rounded-xl overflow-x-auto">
+        <pre className="my-3 inline-block align-top max-w-full whitespace-pre-wrap break-words text-sm bg-zinc-100 dark:bg-zinc-900/70 px-3 py-2 rounded-xl overflow-x-auto">
           {decodeEntitiesMinimal(rawCode)}
         </pre>
       );
@@ -115,8 +124,15 @@ export function CodeBlock(props: any & { isStreaming?: boolean }) {
     );
   }
   if (!inline && rawCode) {
+    if (shouldInlineShortBlock) {
+      return (
+        <code className="rounded-md border border-zinc-300/60 dark:border-zinc-700 bg-zinc-100 text-zinc-900 dark:bg-zinc-800/70 dark:text-zinc-100 px-1.5 py-0.5 text-[0.95em]">
+          {decodeEntitiesMinimal(rawCode)}
+        </code>
+      );
+    }
     return (
-      <pre className="my-3 whitespace-pre-wrap break-words text-sm bg-zinc-100 dark:bg-zinc-900/70 px-3 py-2 rounded-xl overflow-x-auto">{decodeEntitiesMinimal(rawCode)}</pre>
+      <pre className="my-3 inline-block align-top max-w-full whitespace-pre-wrap break-words text-sm bg-zinc-100 dark:bg-zinc-900/70 px-3 py-2 rounded-xl overflow-x-auto">{decodeEntitiesMinimal(rawCode)}</pre>
     );
   }
   return null;

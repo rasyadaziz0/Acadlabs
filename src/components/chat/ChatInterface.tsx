@@ -7,7 +7,6 @@ import ChatMessage from "@/components/chat/ChatMessage";
 import { EmptyState } from "@/components/chat/EmptyState";
 import SearchResults from "@/components/search-results";
 import AiInput from "@/components/ui/ai-input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import React from "react";
 
 interface ChatInterfaceProps {
@@ -30,7 +29,6 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
     const {
         messagesEndRef,
         inputContainerRef,
-        inputHeight,
         scrollToBottom,
         shouldAutoScrollRef
     } = useChatScroll(messages, isLoadingMessages, false);
@@ -64,15 +62,14 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
     const hasMessages = messages.length > 0;
 
     return (
-        <div className="relative h-full w-full overflow-hidden">
-            <ScrollArea className="chat-scroll-area h-full w-full">
+        <div className="relative flex h-full w-full flex-col overflow-hidden">
+            <div className="w-full flex-1 overflow-y-auto px-4 py-6 pb-24 scroll-smooth">
                 <div
                     className={
                         hasMessages
-                            ? "max-w-3xl mx-auto px-4 py-6 space-y-6"
-                            : "max-w-3xl mx-auto px-4 py-6 h-full flex flex-col justify-center"
+                            ? "max-w-3xl mx-auto space-y-6"
+                            : "max-w-3xl mx-auto min-h-full flex flex-col justify-center"
                     }
-                    style={{ paddingBottom: `${hasMessages ? Math.max(inputHeight + 40, 180) : 0}px` }}
                 >
                     {messages.length === 0 && !isLoadingMessages ? (
                         <EmptyState setInput={setInput} />
@@ -114,14 +111,12 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
                         <span className="ml-0.5 inline-block align-[-0.15em] w-[8px] h-[1em] bg-current/70 rounded-sm animate-pulse" />
                     )}
 
-                    {hasMessages && <div ref={messagesEndRef} className="h-4" />}
+                    {hasMessages && <div ref={messagesEndRef} className="h-4 shrink-0" />}
                 </div>
-            </ScrollArea>
+            </div>
 
             <div
                 ref={inputContainerRef}
-                className="fixed bottom-0 right-0 z-20 bg-gradient-to-t from-background via-background/95 to-transparent pt-12 pb-4 px-4"
-                style={{ left: "var(--content-left, 0px)" }}
             >
                 <div className="max-w-3xl mx-auto space-y-4">
                     <AiInput
@@ -135,8 +130,8 @@ export default function ChatInterface({ initialChatId }: ChatInterfaceProps) {
                         onSearchToggle={() => setUseSearch(!useSearch)}
                         placeholder="Ketik pesan..."
                     />
-                    <div className="text-center mt-2 mb-1">
-                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                    <div className="text-center mt-1 mb-0.5">
+                        <p className="text-[8px] text-zinc-400 dark:text-zinc-500">
                             Acadlabs dapat membuat kesalahan. Periksa kembali informasi penting.
                         </p>
                     </div>

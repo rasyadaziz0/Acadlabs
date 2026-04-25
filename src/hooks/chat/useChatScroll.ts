@@ -6,7 +6,6 @@ export function useChatScroll(messages: Message[], isLoading: boolean, isStreami
     const inputContainerRef = useRef<HTMLDivElement>(null);
     const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
     const shouldAutoScrollRef = useRef(shouldAutoScroll);
-    const [inputHeight, setInputHeight] = useState(160);
 
     useEffect(() => {
         shouldAutoScrollRef.current = shouldAutoScroll;
@@ -22,15 +21,5 @@ export function useChatScroll(messages: Message[], isLoading: boolean, isStreami
         }
     }, [messages, shouldAutoScroll, isLoading, isStreaming]);
 
-    useEffect(() => {
-        const el = inputContainerRef.current;
-        if (!el || typeof ResizeObserver === "undefined") return;
-        const ro = new ResizeObserver((entries) => {
-            for (const entry of entries) setInputHeight(Math.ceil(entry.contentRect.height));
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
-    }, []);
-
-    return { messagesEndRef, inputContainerRef, inputHeight, shouldAutoScroll, setShouldAutoScroll, scrollToBottom, shouldAutoScrollRef };
+    return { messagesEndRef, inputContainerRef, shouldAutoScroll, setShouldAutoScroll, scrollToBottom, shouldAutoScrollRef };
 }

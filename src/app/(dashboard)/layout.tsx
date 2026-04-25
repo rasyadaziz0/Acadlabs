@@ -50,7 +50,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-dvh w-full overflow-hidden bg-background">
       <Sidebar side="left" variant="sidebar" collapsible="offcanvas">
         <SidebarHeader />
         <SidebarContent>
@@ -74,10 +74,10 @@ export default async function DashboardLayout({
         </SidebarFooter>
       </Sidebar>
 
-      <SidebarInset>
-        <div className="flex min-h-0 h-svh flex-1 flex-col overflow-hidden">
+      <SidebarInset className="min-h-0 h-full overflow-hidden">
+        <div className="relative flex h-full min-h-0 w-full flex-1 flex-col">
           <Header />
-          <main id="app-scroll" className="flex-1 min-h-0 w-full overflow-hidden pt-16">
+          <main id="app-scroll" className="relative flex-1 min-h-0 w-full overflow-hidden">
             {children}
           </main>
         </div>

@@ -30,7 +30,7 @@ export default function Header() {
   return (
     <>
       <header
-        className="sticky top-0 z-50 border-b border-border/50 bg-background/60 supports-[backdrop-filter]:bg-background/40 backdrop-blur-2xl p-4 relative"
+        className="relative z-50 w-full shrink-0 border-b border-border/50 bg-background/80 p-4 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/40"
       >
 
         <div className="flex items-center justify-between w-full relative z-10">
